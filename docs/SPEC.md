@@ -221,7 +221,28 @@ From `src/conio/cterm_ecma48.c:1626-1700` and `src/conio/cterm_cterm.c:1312`.
 Parameters are applied **in received order** and an unlimited number of
 parameters is supported.
 
-### 1.7 DECSET / DECRST modes
+### 1.7 iCE colours
+
+With iCE colours the blink attribute selects the **bright variant of the
+background colour** instead of making the character blink. This is the "high
+intensity BG" convention that ANSI art uses, that SAUCE's `nonblink` ANSI flag
+describes (`sauce_ansiflag_nonblink`, *"High intensity BG, aka iCE colors"*),
+and that Synchronet's per-user `ICE_COLOR` terminal flag enables server-side.
+
+Upstream implements it with two video-mode flags:
+
+* `CIOLIB_VIDEO_BGBRIGHT` (DECSET 33) — the background nibble keeps the blink
+  bit, so `attr2palette()` resolves the background to index 8-15 (the bright
+  half of the palette) instead of masking it back to 0-7.
+* `CIOLIB_VIDEO_NOBLINK` (DECSET 35) — the glyph is never hidden.
+
+WebSyncTERM exposes this as a **Colours** setting in the toolbar, defaulting to
+**iCE** rather than blinking, because that is what the overwhelming majority of
+BBS content expects. Switching it re-resolves the whole screen from the stored
+attribute bytes, exactly as upstream's draw-time resolution does. A host that
+sends `CSI ? 33 h` or `CSI ? 35 h` still overrides the preference.
+
+### 1.8 DECSET / DECRST modes
 
 | Mode | Default | Effect |
 |---|---|---|
@@ -245,7 +266,7 @@ parameters is supported.
 The CTerm private modes (`CSI = Ps h/l`) are: 1 physical key reports, 2 suppress
 translated key input, 4 LCF, 5 forced LCF, 255 doorway mode.
 
-### 1.8 Sixel graphics
+### 1.9 Sixel graphics
 
 Derived from `src/conio/cterm_dec.c:1418-2165`.
 
@@ -266,7 +287,7 @@ Derived from `src/conio/cterm_dec.c:1418-2165`.
   (DECSET 80 clear); otherwise it is the top-left of the page and the cursor is
   restored afterwards.
 
-### 1.9 ANSI music
+### 1.10 ANSI music
 
 Derived from `src/conio/cterm.txt` ("ANSI MUSIC" section).
 

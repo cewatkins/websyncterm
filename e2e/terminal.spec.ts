@@ -66,12 +66,14 @@ test.describe('WebSyncTERM', () => {
 		await page.getByRole('button', { name: 'Connect' }).first().click();
 
 		await expect.poll(async () => (await screenText(page)).join('\n')).toContain('Green text');
+		// The mock BBS sends SGR 1 (bold) then SGR 32 (green), so the
+		// foreground index is green (2) with the intensity bit (8) set.
 		const fg = await page.evaluate(() => {
 			const hook = (window as unknown as { __wst?: { api?: { term?: { screen: { cols: number; fg: Int16Array } } } } }).__wst;
 			const term = hook?.api?.term;
 			if (!term) return -1;
 			for (let i = 0; i < term.screen.fg.length; i++) {
-				if (term.screen.fg[i] === 2) return i;
+				if (term.screen.fg[i] === 10) return i;
 			}
 			return -1;
 		});
@@ -144,6 +146,36 @@ test.describe('WebSyncTERM', () => {
 		expect(backing[1]).toBe(400);
 		expect(css[0]).toBe(640);
 		expect(css[1]).toBe(480);
+	});
+
+	test('defaults to iCE colours and can be switched to blink', async ({ page }) => {
+		await page.goto('/?debug=1');
+		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByLabel('Name', { exact: true }).fill('Mock BBS');
+		await page.getByLabel('Address').fill('127.0.0.1');
+		await page.getByLabel('Port').fill('18099');
+		await page.getByRole('button', { name: 'Save' }).click();
+		await page.getByRole('button', { name: 'Connect' }).first().click();
+		await expect.poll(async () => (await screenText(page)).join('\n')).toContain('Bright blue background');
+
+		const readState = () =>
+			page.evaluate(() => {
+				const t = (window as unknown as { __wst?: { api?: { term?: { iceColors: boolean; screen: { cols: number; bg: Int16Array } } } } }).__wst?.api?.term;
+				if (!t) return null;
+				// Row 3 holds "Bright blue background", sent as SGR 5;44.
+				return { ice: t.iceColors, bg: t.screen.bg[3 * t.screen.cols] };
+			});
+
+		// iCE is the default: the blink attribute selects the bright variant
+		// of the background colour (blue = 4, bright blue = 12).
+		expect(await readState()).toEqual({ ice: true, bg: 12 });
+
+		await page.selectOption('#ice-select', 'blink');
+		await expect.poll(async () => (await readState())?.bg).toBe(4);
+		expect((await readState())?.ice).toBe(false);
+
+		await page.selectOption('#ice-select', 'ice');
+		await expect.poll(async () => (await readState())?.bg).toBe(12);
 	});
 
 	test('exposes the status region to assistive technology', async ({ page }) => {

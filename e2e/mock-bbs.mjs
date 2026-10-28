@@ -17,6 +17,9 @@ const server = createServer((socket) => {
 	socket.write('Welcome to the mock BBS\r\n');
 	socket.write('\x1b[1;32mGreen text\x1b[0m\r\n');
 	socket.write('\x1b[44;33mBlue on yellow\x1b[0m\r\n');
+	// SGR 5 with a background colour: a bright background in iCE mode,
+	// a blinking cell otherwise.
+	socket.write('\x1b[5;44mBright blue background\x1b[0m\r\n');
 	socket.on('error', () => {});
 });
 

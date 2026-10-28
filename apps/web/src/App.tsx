@@ -37,9 +37,17 @@ export function App(): JSX.Element {
 	const [linkPrompt, setLinkPrompt] = useState<string | null>(null);
 	const [error, setError] = useState('');
 	const [ripEnabled, setRipEnabled] = useState(false);
+	// iCE colours are the default: the blink attribute selects a bright
+	// background rather than blinking, which is what ANSI art and the
+	// Synchronet ICE_COLOR terminal flag expect.
+	const [iceColours, setIceColours] = useState<boolean>(() => {
+		const stored = localStorage.getItem('websyncterm.iceColours');
+		return stored === null ? true : stored === '1';
+	});
 
 	const api = useTerminal({
 		rip: ripEnabled,
+		iceColours,
 		onOpenLink: (uri) => {
 			if (/^(https?|telnet):/i.test(uri)) setLinkPrompt(uri);
 		},
@@ -85,6 +93,10 @@ export function App(): JSX.Element {
 	);
 
 	// Expose a debug hook for the end-to-end tests and for troubleshooting.
+	useEffect(() => {
+		localStorage.setItem('websyncterm.iceColours', iceColours ? '1' : '0');
+	}, [iceColours]);
+
 	useEffect(() => {
 		if (typeof location === 'undefined') return;
 		if (!new URLSearchParams(location.search).has('debug')) return;
@@ -166,6 +178,18 @@ export function App(): JSX.Element {
 								{mode.cols}×{mode.rows}
 							</option>
 						))}
+					</select>
+				</label>
+				<label className="btn" htmlFor="ice-select">
+					Colours
+					<select
+						id="ice-select"
+						value={iceColours ? 'ice' : 'blink'}
+						onChange={(event) => setIceColours(event.target.value === 'ice')}
+						style={{ background: 'transparent', color: 'inherit', border: 'none' }}
+					>
+						<option value="ice">iCE (bright background)</option>
+						<option value="blink">Blink</option>
 					</select>
 				</label>
 				<label className="btn" htmlFor="font-select">

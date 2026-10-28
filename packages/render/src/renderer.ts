@@ -94,7 +94,11 @@ export interface RendererOptions {
 	mode?: VideoMode | string;
 	/** Integer pixel scale (default 1). */
 	scale?: number;
-	/** Default blink handling when a frame does not specify it. */
+	/**
+	 * Default blink handling when a frame does not specify it.
+	 *
+	 * When true the blink attribute never hides the glyph (DECSET 35).
+	 */
 	noBlink?: boolean;
 	/** Disable image smoothing when scaling glyphs. */
 	smoothing?: boolean;
@@ -504,11 +508,9 @@ export class Renderer {
 			if (bright >= 0 && bright < 8) fg = palette.get(bright + 8);
 		}
 
-		// DECSET 35: blink becomes a bright background instead of a hidden glyph.
-		if (noBlink && (flags & FLAG_BLINK) !== 0 && !trueBg) {
-			const bright = bgIndex >= 0 ? bgIndex : this.opt.defaultBg;
-			if (bright >= 0 && bright < 8) bg = palette.get(bright + 8);
-		}
+		// DECSET 35 (NOBLINK) only stops the glyph from being hidden; the
+		// bright background comes from DECSET 33 (BGBRIGHT), which the
+		// terminal applies when it resolves the cell's background index.
 
 		if ((flags & FLAG_REVERSE) !== 0) {
 			const swap = fg;

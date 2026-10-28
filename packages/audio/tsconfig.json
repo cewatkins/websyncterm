@@ -3,8 +3,7 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true,
-    "paths": { "@websyncterm/core": ["../core/src/index.ts"] }
+    "composite": true
   },
   "include": ["src/**/*.ts"],
   "references": [{ "path": "../core" }]

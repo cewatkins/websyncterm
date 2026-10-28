@@ -134,6 +134,8 @@ theming features that SyncTERM 1.10 added, and the remaining UI surfaces
 - [x] 90-97 bright foreground, 100-107 bright background
 - [x] Parameters applied in order, unlimited count
 - [x] iCE colours: DECSET 31/32/33/34/35
+- [x] iCE colours as a user setting (bright background instead of blinking),
+      on by default, with the whole screen re-resolved when it changes
 - [x] Blink as an alternate font slot
 - [x] Negative image (7/27) preserving the intensity bits
 

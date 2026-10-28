@@ -42,7 +42,9 @@ describe('end-to-end', () => {
 		// the real HTTP/WebSocket stack.
 		const { spawn } = await import('node:child_process');
 		const port = 18023;
-		const child = spawn('node', ['dist/index.js'], {
+		// Run the TypeScript source directly so the test does not depend on a
+		// prior build.
+		const child = spawn('npx', ['tsx', 'src/index.ts'], {
 			cwd: new URL('../', import.meta.url).pathname,
 			env: {
 				...process.env,
@@ -112,8 +114,11 @@ describe('end-to-end', () => {
 			if (at >= 0) greenIndex = row * term.cols + at;
 		}
 		expect(greenIndex).toBeGreaterThanOrEqual(0);
-		// The green attribute must have survived the round trip.
-		expect(term.screen.fg[greenIndex]).toBe(2);
+		// The green attribute must have survived the round trip. The mock
+		// BBS sends SGR 1 (bold) then SGR 32 (green), so the foreground
+		// index is green (2) with the intensity bit (8) set.
+		expect(term.screen.fg[greenIndex]).toBe(10);
+		expect(term.screen.flags[greenIndex] & 1).toBe(1);
 		socket.close();
 	}, 30_000);
 });

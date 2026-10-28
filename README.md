@@ -180,6 +180,23 @@ SSRF surface, no credentials in the page.
 
 ---
 
+## iCE colours
+
+The **Colours** setting in the toolbar chooses between:
+
+| Mode | `SGR 5` / `SGR 6` does |
+|---|---|
+| **iCE (bright background)** *(default)* | selects the bright variant of the background colour; the character does not blink |
+| **Blink** | the character blinks and the background stays normal |
+
+iCE is the default because it is what ANSI art expects: `ESC[5;44m` means "bright
+blue background", not "blue background that flickers". It is the same
+convention Synchronet uses for its per-user `ICE_COLOR` terminal flag, and the
+same one SAUCE's `nonblink` ANSI flag describes.
+
+A host that sends `CSI ? 33 h` or `CSI ? 35 h` overrides the setting for the
+rest of the session, as it does in SyncTERM.
+
 ## Feature matrix versus real SyncTERM
 
 The full checklist is in [docs/COMPAT.md](docs/COMPAT.md). The headline

@@ -38,6 +38,14 @@ export class ScreenBuffer {
 	readonly bgRgb: Uint32Array;
 	/** Hyperlink id per cell (index into `links`), or -1. */
 	readonly linkId: Int32Array;
+	/**
+	 * The raw attribute byte per cell.
+	 *
+	 * Upstream resolves the palette index at draw time from the attribute
+	 * byte, so changing a mode (iCE colours, bright backgrounds) re-colours
+	 * the whole screen. Keeping the raw byte here makes that possible.
+	 */
+	readonly attrs: Uint8Array;
 
 	/** Hyperlink table shared by the screen and the scrollback. */
 	links: LinkRun[] = [];
@@ -57,6 +65,7 @@ export class ScreenBuffer {
 		this.fgRgb = new Uint32Array(n);
 		this.bgRgb = new Uint32Array(n);
 		this.linkId = new Int32Array(n);
+		this.attrs = new Uint8Array(n);
 		this.dirty = new Uint8Array(n);
 		this.linkId.fill(-1);
 		if (!skipClear) this.clear();
@@ -76,6 +85,7 @@ export class ScreenBuffer {
 		this.bgRgb.fill(0);
 		this.linkId.fill(-1);
 		this.chars.fill(0x20);
+		this.attrs.fill(0x07);
 		this.dirty.fill(1);
 	}
 
@@ -91,6 +101,7 @@ export class ScreenBuffer {
 		this.fgRgb.set(src.fgRgb.subarray(off, off + n), doff);
 		this.bgRgb.set(src.bgRgb.subarray(off, off + n), doff);
 		this.linkId.set(src.linkId.subarray(off, off + n), doff);
+		this.attrs.set(src.attrs.subarray(off, off + n), doff);
 		this.dirty.fill(1, doff, doff + n);
 	}
 
@@ -112,6 +123,7 @@ export class ScreenBuffer {
 		this.fgRgb.copyWithin(dstOff, srcOff, srcOff + n);
 		this.bgRgb.copyWithin(dstOff, srcOff, srcOff + n);
 		this.linkId.copyWithin(dstOff, srcOff, srcOff + n);
+		this.attrs.copyWithin(dstOff, srcOff, srcOff + n);
 		this.dirty.fill(1, dstOff, dstOff + n);
 	}
 

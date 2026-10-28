@@ -10,6 +10,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
 	CTerm,
 	ConnectionManager,
+	ExtAttr,
+	TransferHandshakeGuard,
+	type Handshake,
 	type ConnectOptions,
 	type ConnectionState,
 	type TermEmulationName,
@@ -46,6 +49,11 @@ export interface UseTerminalOptions {
 	emulation?: TermEmulationName;
 	/** Whether the RIP interpreter is enabled. */
 	rip?: boolean;
+	/**
+	 * Whether iCE colours are used (the blink attribute selects a bright
+	 * background instead of blinking). Defaults to true.
+	 */
+	iceColours?: boolean;
 	/** Called when the user activates a hyperlink. */
 	onOpenLink?: (uri: string) => void;
 }
@@ -86,7 +94,7 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 	const builtinRef = useRef<BuiltinFontSet | null>(null);
 	const ripRef = useRef<RipInterpreter | null>(null);
 	const ripVersionRef = useRef(0);
-	const lookbehindRef = useRef<number[]>([]);
+	const guardRef = useRef(new TransferHandshakeGuard());
 	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const transferActiveRef = useRef(false);
 
@@ -134,6 +142,11 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 			cancelled = true;
 		};
 	}, []);
+
+	// Apply the iCE-colour preference.
+	useEffect(() => {
+		termRef.current?.setIceColors(options.iceColours !== false);
+	}, [options.iceColours]);
 
 	// Create the RIP interpreter when RIP is enabled.
 	useEffect(() => {
@@ -217,12 +230,21 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 			const term = termRef.current;
 			const renderer = rendererRef.current;
 			if (!term || !renderer) return;
-			renderer.render(term.screen, term.palette, {
-				x: term.xpos,
-				y: term.ypos,
-				style: term.cursorStyle,
-				visible: term.cursorVisible,
-			});
+			renderer.render(
+				term.screen,
+				term.palette,
+				{
+					x: term.xpos,
+					y: term.ypos,
+					style: term.cursorStyle,
+					visible: term.cursorVisible,
+				},
+				{
+					// DECSET 35 (and the iCE-colour setting) stop the blink
+					// attribute from hiding the glyph.
+					noBlink: (term.extattr & ExtAttr.NoBlink) !== 0,
+				},
+			);
 		};
 		frame = requestAnimationFrame(loop);
 		return () => cancelAnimationFrame(frame);
@@ -249,8 +271,10 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 	/**
 	 * Route incoming bytes.
 	 *
-	 * The bytes go through the RIP interpreter (when enabled) and are held
-	 * back briefly so that a ZMODEM handshake can be removed from the screen.
+	 * The bytes go through the RIP interpreter (when enabled) and then
+	 * through the transfer handshake guard, which withholds only the bytes
+	 * that could start a ZMODEM or X/YMODEM transfer. Everything else is
+	 * displayed immediately.
 	 */
 	const handleIncoming = useCallback(
 		(data: Uint8Array) => {
@@ -279,51 +303,38 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 				return;
 			}
 
-			// Hold back the tail so that a transfer handshake can be removed.
-			const held = lookbehindRef.current;
-			for (const byte of payload) held.push(byte);
+			const guard = guardRef.current;
+			const display: number[] = [];
+			let handshake: Handshake | null = null;
+			let index = 0;
+			for (; index < payload.length; index++) {
+				const result = guard.push(payload[index]);
+				if (result.handshake) {
+					handshake = result.handshake;
+					index++;
+					break;
+				}
+				for (const byte of result.display) display.push(byte);
+			}
+			if (display.length > 0) term.write(Uint8Array.from(display));
 
-			// The held bytes are flushed once the remote goes quiet, so a
-			// static screen is never left with a partial last line.
+			if (handshake) {
+				// The handshake never reaches the screen; the rest of the
+				// chunk belongs to the transfer protocol.
+				transferActiveRef.current = true;
+				transfers.start(handshake);
+				const rest = payload.subarray(index);
+				if (rest.length > 0) transfers.receive(rest);
+				return;
+			}
+
+			// Release any bytes still held back once the host goes quiet.
 			if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
 			flushTimerRef.current = setTimeout(() => {
 				flushTimerRef.current = null;
-				const pending = lookbehindRef.current;
-				if (pending.length === 0 || transferActiveRef.current) return;
-				const display = pending.splice(0, pending.length);
-				termRef.current?.write(Uint8Array.from(display));
-			}, 150);
-
-			// Look for a transfer handshake at the end of the held bytes.
-			if (held.length >= 4) {
-				const tail = Uint8Array.from(held.slice(-4));
-				const kind = detectTransfer(tail);
-				if (kind) {
-					const display = held.slice(0, held.length - 4);
-					held.length = 0;
-					if (display.length > 0) term.write(Uint8Array.from(display));
-					transferActiveRef.current = true;
-					transfers.start(kind);
-					return;
-				}
-			}
-			if (held.length >= 2) {
-				const tail = Uint8Array.from(held.slice(-2));
-				const kind = detectXModem(tail);
-				if (kind) {
-					const display = held.slice(0, held.length - 2);
-					held.length = 0;
-					if (display.length > 0) term.write(Uint8Array.from(display));
-					transferActiveRef.current = true;
-					transfers.start(kind);
-					return;
-				}
-			}
-
-			if (held.length <= LOOKBEHIND) return;
-			const display = held.slice(0, held.length - LOOKBEHIND);
-			held.splice(0, display.length);
-			term.write(Uint8Array.from(display));
+				const pending = guard.flush();
+				if (pending.length > 0) termRef.current?.write(Uint8Array.from(pending));
+			}, 120);
 		},
 		[transfers],
 	);
@@ -332,7 +343,7 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		(options2: ConnectOptions) => {
 			const term = termRef.current;
 			if (!term) return;
-			lookbehindRef.current = [];
+			guardRef.current.reset();
 			transferActiveRef.current = false;
 			const conn = new ConnectionManager({
 				onData: (data) => {

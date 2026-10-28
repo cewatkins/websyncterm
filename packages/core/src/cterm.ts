@@ -317,6 +317,61 @@ export class CTerm {
 		this.emulation = emulation;
 	}
 
+	/**
+	 * Enable or disable iCE colours.
+	 *
+	 * With iCE colours the blink attribute selects the bright variant of the
+	 * background colour instead of making the character blink. This is the
+	 * "high intensity BG" convention that ANSI art and SAUCE's `nonblink`
+	 * ANSI flag refer to, and it is what Synchronet's `ICE_COLOR` terminal
+	 * flag enables on the server side.
+	 *
+	 * This is the same pair of mode flags that DECSET 33 (BGBRIGHT) and
+	 * DECSET 35 (NOBLINK) toggle, so a host that sets them explicitly still
+	 * overrides this preference.
+	 */
+	setIceColors(enabled: boolean): void {
+		this.setFlag(ExtAttr.BgBright, enabled);
+		this.setFlag(ExtAttr.NoBlink, enabled);
+		this.invalidateAttributes();
+		this.refreshCellAttributes();
+	}
+
+	/**
+	 * Re-resolve the colours of every cell from its raw attribute byte.
+	 *
+	 * Upstream resolves the palette index at draw time, so changing a mode
+	 * (iCE colours, bright backgrounds, no-bright) re-colours the whole
+	 * screen at once. This reproduces that.
+	 */
+	refreshCellAttributes(): void {
+		const noBright = (this.extattr & ExtAttr.NoBright) !== 0;
+		const bgBright = (this.extattr & ExtAttr.BgBright) !== 0;
+		for (let i = 0; i < this.screen.attrs.length; i++) {
+			const flags = this.screen.flags[i];
+			const attr = this.screen.attrs[i];
+			if ((flags & 64) === 0) {
+				// The foreground came from the attribute nibbles.
+				let fg = attr & 0x0f;
+				if (noBright) fg &= 0x07;
+				this.screen.fg[i] = fg;
+			}
+			if ((flags & 128) === 0) {
+				// The background came from the attribute nibbles.
+				let bg = (attr >> 4) & 0x0f;
+				if (!bgBright) bg &= 0x07;
+				this.screen.bg[i] = bg;
+			}
+			this.screen.dirty[i] = 1;
+		}
+		this.invalidateAttributes();
+	}
+
+	/** Whether iCE colours are enabled. */
+	get iceColors(): boolean {
+		return (this.extattr & ExtAttr.BgBright) !== 0;
+	}
+
 	/** Whether DECBKM is set (backspace sends 0x08 rather than 0x7f). */
 	get decBkm(): boolean {
 		return (this.extattr & ExtAttr.DecBkm) !== 0;
@@ -335,6 +390,7 @@ export class CTerm {
 	/** Replace the first 16 palette entries (a BBS-supplied palette). */
 	setBasePalette(colors: readonly number[]): void {
 		this.palette.setBase(colors);
+		this.invalidateAttributes();
 	}
 
 	// ---------------------------------------------------------------------
@@ -353,6 +409,7 @@ export class CTerm {
 		this.negative = false;
 		this.fgTc = null;
 		this.bgTc = null;
+		this.invalidateAttributes();
 		this.extattr = ExtAttr.AutoWrap | ExtAttr.CursorVisible | ExtAttr.DecBkm | ExtAttr.SixelScroll | ExtAttr.ExtendedPalette;
 		if (forcedLcf) this.extattr |= ExtAttr.LcfForced | ExtAttr.LcfEnabled;
 		this.decModes.clear();
@@ -568,6 +625,7 @@ export class CTerm {
 		const bgRgb = this.cachedBgRgb;
 		const link = this.cachedLink;
 		const i = y * this.cols + x;
+		this.screen.attrs[i] = this.attr;
 		this.screen.chars[i] = byteToUnicode(byte, this.codepage);
 		this.screen.fg[i] = fg;
 		this.screen.bg[i] = bg;
@@ -622,6 +680,16 @@ export class CTerm {
 		if (this.attr & 0x08) f |= 1; // bold / high intensity
 		if (this.attr & 0x80) f |= 2; // blink
 		if (this.negative) f |= 4;
+		// The renderer needs to know when a colour came from an extended SGR
+		// sequence rather than from the attribute nibbles.
+		if (this.fgColor >= 0) {
+			if (this.fgColor & TRUECOLOR_FLAG) f |= 16;
+			else f |= 64;
+		}
+		if (this.bgColor >= 0) {
+			if (this.bgColor & TRUECOLOR_FLAG) f |= 32;
+			else f |= 128;
+		}
 		return f;
 	}
 
@@ -738,6 +806,7 @@ export class CTerm {
 		const bgRgb = this.cachedBgRgb;
 		const base = y * this.cols;
 		for (let x = 0; x < this.cols; x++) {
+			this.screen.attrs[base + x] = this.attr;
 			this.screen.chars[base + x] = 0x20;
 			this.screen.fg[base + x] = fg;
 			this.screen.bg[base + x] = bg;
@@ -761,6 +830,7 @@ export class CTerm {
 			for (let x = x0; x <= x1; x++) {
 				if (x < 0 || x >= this.cols || y < 0 || y >= this.rows) continue;
 				const i = y * this.cols + x;
+				this.screen.attrs[i] = this.attr;
 				this.screen.chars[i] = 0x20;
 				this.screen.fg[i] = fg;
 				this.screen.bg[i] = bg;
@@ -2197,6 +2267,7 @@ export class CTerm {
 			flag === ExtAttr.NoBlink
 		) {
 			this.invalidateAttributes();
+			this.refreshCellAttributes();
 		}
 	}
 
@@ -2455,12 +2526,53 @@ export class CTerm {
 		}
 	}
 
+	/**
+	 * `CSI ? Ps $ p` - report the state of a private mode.
+	 *
+	 * Upstream reports 1 when the mode is set and 2 when it is reset, and 0
+	 * for a mode it does not know.
+	 */
 	private decrqmPrivate(): void {
 		const ps = this.param0(1, 0);
-		const known = new Set([
-			6, 7, 9, 25, 31, 32, 33, 34, 35, 67, 69, 80, 1000, 1001, 1002, 1003, 1004, 1005, 1006, 1007, 1015, 1016, 2004,
-		]);
-		const pm = known.has(ps) ? 1 : 0;
+		let pm = 0;
+		switch (ps) {
+			case 6:
+				pm = this.extattr & ExtAttr.OriginMode ? 1 : 2;
+				break;
+			case 7:
+				pm = this.extattr & ExtAttr.AutoWrap ? 1 : 2;
+				break;
+			case 25:
+				pm = this.extattr & ExtAttr.CursorVisible ? 1 : 2;
+				break;
+			case 31:
+				pm = this.extattr & ExtAttr.AltChars ? 1 : 2;
+				break;
+			case 32:
+				pm = this.extattr & ExtAttr.NoBright ? 1 : 2;
+				break;
+			case 33:
+				pm = this.extattr & ExtAttr.BgBright ? 1 : 2;
+				break;
+			case 34:
+				pm = this.extattr & ExtAttr.BlinkAltChars ? 1 : 2;
+				break;
+			case 35:
+				pm = this.extattr & ExtAttr.NoBlink ? 1 : 2;
+				break;
+			case 67:
+				pm = this.extattr & ExtAttr.DecBkm ? 1 : 2;
+				break;
+			case 69:
+				pm = this.extattr & ExtAttr.DecLrmm ? 1 : 2;
+				break;
+			case 80:
+				pm = this.extattr & ExtAttr.SixelScroll ? 1 : 2;
+				break;
+			default:
+				if (this.decModes.has(ps)) pm = 1;
+				break;
+		}
 		this.respond(`\x1b[?${ps};${pm}$y`);
 	}
 
@@ -2561,6 +2673,9 @@ export class CTerm {
 	// ---------------------------------------------------------------------
 
 	private selectGraphicRendition(): void {
+		// SGR can change any part of the attribute byte, so the cached cell
+		// attributes have to be recomputed.
+		this.invalidateAttributes();
 		if (this.params.count === 0) {
 			this.sgrReset();
 			return;
@@ -2595,7 +2710,8 @@ export class CTerm {
 					this.setNegative(true);
 					break;
 				case 8:
-					this.attr = (this.attr & 0xf0) | ((this.attr >> 4) & 0x0f);
+					// Concealed: the foreground becomes the background.
+					this.attr = (this.attr & 0x88) | (((this.attr >> 4) & 0x07) << 4) | ((this.attr >> 4) & 0x07);
 					this.fgColor = this.bgColor;
 					this.fgTc = this.bgTc;
 					break;
@@ -2682,23 +2798,41 @@ export class CTerm {
 		this.bgTc = null;
 	}
 
+	/**
+	 * Set the foreground colour.
+	 *
+	 * Upstream `set_attr()` masks with 0xF8, so the bold bit, the background
+	 * nibble and the blink bit are all preserved, and only the low three
+	 * bits of the foreground are replaced.
+	 */
 	private setFgColor(index: number): void {
 		this.invalidateAttributes();
+		const fg = index & 0x07;
 		if (this.negative) {
-			this.attr = (this.attr & 0xf0) | ((this.attr >> 4) & 0x0f);
+			this.attr = (this.attr & 0xf8) | (((this.attr >> 4) & 0x07));
 		} else {
-			this.attr = (this.attr & 0xf0) | (index & 0x0f);
+			this.attr = (this.attr & 0xf8) | fg;
 		}
 		this.fgColor = -1;
 		this.fgTc = null;
 	}
 
+	/**
+	 * Set the background colour.
+	 *
+	 * Upstream `set_attr()` masks with 0x8F, so the foreground, the bold
+	 * bit and the blink bit are preserved, and only the low three bits of
+	 * the background are replaced. Keeping the blink bit is what makes the
+	 * iCE-colour convention work: `CSI 5 ; 44 m` is a bright blue
+	 * background, not a blue background that blinks.
+	 */
 	private setBgColor(index: number): void {
 		this.invalidateAttributes();
+		const bg = index & 0x07;
 		if (this.negative) {
-			this.attr = (this.attr & 0x0f) | ((this.attr & 0x0f) << 4);
+			this.attr = (this.attr & 0x8f) | ((this.attr & 0x07) << 4);
 		} else {
-			this.attr = (this.attr & 0x0f) | ((index & 0x0f) << 4);
+			this.attr = (this.attr & 0x8f) | (bg << 4);
 		}
 		this.bgColor = -1;
 		this.bgTc = null;
@@ -2707,8 +2841,10 @@ export class CTerm {
 	private setNegative(on: boolean): void {
 		this.invalidateAttributes();
 		if (on === this.negative) return;
-		const fg = this.attr & 0x0f;
-		const bg = (this.attr >> 4) & 0x0f;
+		// Only the low three bits of each nibble are swapped; the bold bit
+		// and the blink bit stay where they are.
+		const fg = this.attr & 0x07;
+		const bg = (this.attr >> 4) & 0x07;
 		this.attr = (this.attr & 0x88) | (on ? bg : fg) | ((on ? fg : bg) << 4);
 		const fgColor = this.fgColor;
 		this.fgColor = this.bgColor;

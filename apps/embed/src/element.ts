@@ -28,6 +28,7 @@ const ATTRIBUTES = {
 	font: 'font',
 	speed: 'speed',
 	token: 'token',
+	ice: 'ice',
 } as const;
 
 /** Options read from the element's attributes. */
@@ -43,6 +44,8 @@ export interface EmbedOptions {
 	font: string;
 	speed: number;
 	token: string;
+	/** "1" for iCE colours (bright background), "0" for blink. */
+	ice: string;
 }
 
 /**
@@ -64,6 +67,7 @@ export function readOptions(element: HTMLElement): EmbedOptions {
 		font: get(ATTRIBUTES.font),
 		speed: Number.isFinite(speed) ? speed : 0,
 		token: get(ATTRIBUTES.token),
+		ice: get(ATTRIBUTES.ice),
 	};
 }
 
@@ -120,11 +124,13 @@ export class WebSyncTermElement extends HTMLElement {
 		this.term = new CTerm({
 			cols: mode.cols,
 			rows: mode.rows,
+			// iCE colours are the default; "ice=0" selects blinking.
 			onResponse: (data) => this.connection?.send(data),
 			onHyperlink: (uri) => {
 				if (/^(https?|telnet):/i.test(uri)) window.open(uri, '_blank', 'noopener,noreferrer');
 			},
 		});
+		this.term.setIceColors(options.ice !== '0');
 
 		const canvas = this.root.querySelector<HTMLCanvasElement>('canvas');
 		if (canvas) {
