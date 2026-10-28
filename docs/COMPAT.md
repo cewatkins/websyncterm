@@ -6,6 +6,18 @@ in a browser.
 Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
 ([SynchronetBBS/sbbs](https://github.com/SynchronetBBS/sbbs)).
 
+| | Count |
+|---|---|
+| `[x]` done | 156 |
+| `[~]` partial | 20 |
+| `[ ]` not implemented | 18 |
+| `[!]` not possible in a browser | 4 |
+
+The largest remaining gaps are the non-ANSI terminal emulations (PETSCII,
+ATASCII, Prestel, BBC Mode 7 and Atari ST — see §6), the Wren scripting and
+theming features that SyncTERM 1.10 added, and the remaining UI surfaces
+(scrollback search, mouse selection and the local Alt shortcuts).
+
 ---
 
 ## 1. Screen modes
@@ -156,15 +168,20 @@ Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
 
 | Emulation | Status | Notes |
 |---|---|---|
-| ANSI-BBS | [x] | the default; full CTerm extension set |
-| ECMA-48 | [x] | the base layer of ANSI-BBS |
-| PETSCII (C64/C128, upper and lower) | [~] | key translation and the 40/80-column colour tables are implemented; the full control-code table is partial |
-| ATASCII | [~] | key translation and inverse-video are implemented; the full screen-code table is partial |
-| Prestel / Viewdata | [~] | key translation implemented; the serial-attribute model is partial |
-| BBC Micro (Mode 7) | [~] | key translation implemented; the VDU 23/28 model is partial |
-| Atari ST (VT52 + TOS extensions) | [~] | key translation implemented; the TOS extension set is partial |
+| ANSI-BBS | [x] | the default; the full CTerm extension set (see §2 and §3) |
+| ECMA-48 | [x] | the base layer of ANSI-BBS, exposed as `packages/core` |
+| PETSCII (C64/C128, upper and lower) | [ ] | the **key translation** is implemented (`encodeKey`); the emulation itself — the control-code table, the 40/80-column colour tables and the reverse-video state machine — is not |
+| ATASCII | [ ] | the key translation and the inverse-video toggle are implemented; the screen-code table is not |
+| Prestel / Viewdata | [ ] | the key translation is implemented; the serial-attribute model (mosaics, double height, conceal, flash) and the memory-slot protocol are not |
+| BBC Micro (Mode 7) | [ ] | the key translation is implemented; the VDU 23/28 model is not |
+| Atari ST (VT52 + TOS extensions) | [ ] | the key translation is implemented; the TOS extension set is not |
 | RIPscrip | [x] | see §10 |
 | Operation Overkill II | [ ] | upstream auto-detects it from the byte stream; not implemented |
+
+The PETSCII, ATASCII, Prestel, BEEB and Atari ST rows are the largest gap in
+the project. Each needs its own screen model (a different cell layout, a
+different palette model and a different control-code table) rather than a
+change to the ANSI-BBS engine.
 
 ---
 
@@ -190,14 +207,17 @@ Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
 ## 8. Dialing directory
 
 - [x] List, add, edit, delete
-- [x] Folders and search
+- [x] Search
+- [~] Folders — the data model has a `folder` field, but there is no folder UI
 - [x] Stored in IndexedDB
 - [x] Fields: name, address, port, protocol, username, password, system
       password, screen mode, font, speed, music on/off, ANSI/RIP flags, notes,
       last called
-- [x] Encrypted directory (WebCrypto AES-GCM with PBKDF2)
+- [~] Encrypted directory (WebCrypto AES-GCM with PBKDF2) — the crypto
+      module is implemented and tested, but there is no UI for it yet
 - [x] Import and export of SyncTERM `syncterm.lst` files
-- [x] Shareable URL and QR links
+- [~] Shareable URL and QR links — the `?bbs=host:port&proto=…` handler works;
+      the QR generator is not implemented
 - [ ] Named sort profiles with `<` / `>` cycling (a SyncTERM 1.8 feature)
 - [ ] Web-based main dialing directory (a SyncTERM 1.8 feature)
 
@@ -216,10 +236,16 @@ Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
 | ZMODEM | [x] | [x] |
 | ZMODEM resume (`ZRPOS`) | [x] | [x] |
 
-- [x] Progress UI, cancel key, batch transfers
-- [x] Drag-and-drop and the File System Access API
-- [x] Auto-detection of a remote ZMODEM header
-- [x] Per-session file locker in IndexedDB, with a ZIP bulk export
+- [x] Progress UI and a cancel key
+- [x] Auto-detection of a remote ZMODEM/XMODEM header, with the handshake
+      removed from the screen (a 64-byte look-behind)
+- [x] Per-session file locker in IndexedDB, with a "save as" action
+- [~] Batch transfers — the protocol engines support them, but the browser UI
+      has no batch picker yet
+- [ ] Drag-and-drop and the File System Access API
+- [ ] ZIP bulk export
+- [ ] Uploads initiated from the browser (the engine is implemented; there is
+      no file picker in the UI yet)
 - [ ] CET Telesoftware protocol (a Prestel-specific protocol)
 
 ---
@@ -247,7 +273,8 @@ Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
       palette map, repeat, graphics carriage return and new line
 - [x] Transparent mode and the DECSET 80 scrolling behaviour
 - [x] The cursor position after the image
-- [x] Interaction with the text layer
+- [x] Interaction with the text layer (the image is composited beneath the
+      text and the text's default background lets it show through)
 
 ---
 
@@ -263,15 +290,24 @@ Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
 ## 13. User interface
 
 - [x] Status bar with the connection info, mode, speed and time online
-- [x] Scrollback buffer with mouse-wheel scrolling and search
-- [x] Select, copy and paste (non-ASCII screen modes are translated to text)
-- [x] "Copy as ANSI", PNG screenshot and `.ANS` export
+- [x] Scrollback buffer (5000 rows) with mouse-wheel scrolling
+- [~] Scrollback search — the engine can search the screen (`searchScreen`);
+      there is no search UI yet
+- [~] Select and copy — the engine can extract text and ANSI from a region;
+      the mouse selection UI is not wired up yet
+- [x] Paste (the clipboard paste event is handled by the terminal pane)
+- [~] "Copy as ANSI", PNG screenshot and `.ANS` export — the screenshot
+      works; the ANSI export is available in the engine but has no UI
 - [x] Fullscreen (Alt+Enter), integer scaling, smoothing, CRT scanlines and
       curvature
-- [x] Clickable OSC 8 links and Ctrl+click URL detection
-- [x] Mouse reporting for BBS door games, alongside text selection
+- [x] Clickable OSC 8 links, with a confirmation dialog
+- [~] Ctrl+click URL detection — the engine parses the links; the Ctrl+click
+      gesture is not wired up yet
+- [~] Mouse reporting for BBS door games — the encoder is implemented
+      (`encodeMouseReport`); the browser events are not yet dispatched
 - [x] The on-screen keyboard for mobile
-- [x] The Alt shortcuts (see SPEC §4.2)
+- [~] The Alt shortcuts (see SPEC §4.2) — the binding table is implemented;
+      the local shortcuts are not yet dispatched by the web app
 - [ ] The Wren menu / REPL console (SyncTERM 1.10)
 - [ ] The theme editor and the web theme catalog (SyncTERM 1.10)
 - [ ] The SFTP browser and transfer queue (SyncTERM 1.10)
@@ -289,22 +325,28 @@ Reference: upstream **SyncTERM 1.10 alpha / CTerm 1.332**
 - [x] SSRF protection, rate limiting, max sessions, idle timeout, origin checks
 - [x] A Docker image and a `docker-compose.yml`
 - [x] A sample nginx configuration
-- [x] Direct connection to a Synchronet server's built-in WebSocket service
-      (without the gateway)
+- [~] Direct connection to a Synchronet server's built-in WebSocket service
+      (without the gateway) — the gateway can be pointed at any WebSocket
+      endpoint, but the Synchronet-specific handshake is not implemented
 
 ---
 
 ## 15. Quality
 
-- [x] Unit tests for every parser state machine
-- [x] Fuzzing harness for the ANSI parser
-- [x] Playwright E2E tests against a mock BBS
+- [x] Unit tests for every parser state machine (289 tests)
+- [x] Fuzzing harness for the ANSI parser (200 seeded random streams plus
+      split-at-every-boundary checks)
+- [x] A conformance corpus with golden screen dumps (`test/corpus`,
+      `test/golden`)
+- [x] A replay harness for the upstream Synchronet `.ans` corpus
+- [x] Playwright E2E tests against a mock telnet BBS (6 tests)
 - [x] Keyboard-only operation and a screen-reader-friendly status region
-- [x] A documented performance budget
-- [~] Golden-image comparison against real SyncTERM output (the harness is in
-      place; the reference corpus is being captured)
-- [~] Lighthouse PWA score 90+ (the PWA manifest and service worker are in
-      place; the score is not yet measured)
+- [x] A documented and measured performance budget
+- [~] Golden **image** comparison against real SyncTERM output — the golden
+      screen dumps exist; capturing reference images from a real SyncTERM
+      build is still to do
+- [~] Lighthouse PWA score 90+ — the manifest and the service worker are in
+      place; the score has not been measured
 
 ---
 

@@ -46,7 +46,7 @@ export class ScreenBuffer {
 	/** True when the cell has been written to since the last clear. */
 	readonly dirty: Uint8Array;
 
-	constructor(cols: number, rows: number) {
+	constructor(cols: number, rows: number, skipClear = false) {
 		this.cols = cols;
 		this.rows = rows;
 		const n = cols * rows;
@@ -59,7 +59,7 @@ export class ScreenBuffer {
 		this.linkId = new Int32Array(n);
 		this.dirty = new Uint8Array(n);
 		this.linkId.fill(-1);
-		this.clear();
+		if (!skipClear) this.clear();
 	}
 
 	/** Index of a cell. */
@@ -92,6 +92,27 @@ export class ScreenBuffer {
 		this.bgRgb.set(src.bgRgb.subarray(off, off + n), doff);
 		this.linkId.set(src.linkId.subarray(off, off + n), doff);
 		this.dirty.fill(1, doff, doff + n);
+	}
+
+	/**
+	 * Copy a block of rows.
+	 *
+	 * `copyWithin` has memmove semantics, so overlapping regions (as used by
+	 * scrolling) are handled correctly.
+	 */
+	copyRows(srcStart: number, dstStart: number, count: number): void {
+		if (count <= 0) return;
+		const srcOff = srcStart * this.cols;
+		const dstOff = dstStart * this.cols;
+		const n = count * this.cols;
+		this.chars.copyWithin(dstOff, srcOff, srcOff + n);
+		this.fg.copyWithin(dstOff, srcOff, srcOff + n);
+		this.bg.copyWithin(dstOff, srcOff, srcOff + n);
+		this.flags.copyWithin(dstOff, srcOff, srcOff + n);
+		this.fgRgb.copyWithin(dstOff, srcOff, srcOff + n);
+		this.bgRgb.copyWithin(dstOff, srcOff, srcOff + n);
+		this.linkId.copyWithin(dstOff, srcOff, srcOff + n);
+		this.dirty.fill(1, dstOff, dstOff + n);
 	}
 
 	/** Write a cell. */
@@ -168,14 +189,20 @@ export class Scrollback {
 	/** Append a copy of the given screen row. */
 	push(screen: ScreenBuffer, row: number): void {
 		if (this.capacity <= 0) return;
-		const copy = new ScreenBuffer(screen.cols, 1);
+		const index =
+			this.count === this.capacity ? this.head : (this.head + this.count) % this.capacity;
+		// The row buffers are reused rather than reallocated: scrolling a
+		// full screen is a hot path.
+		let copy = this.rows[index];
+		if (!copy) {
+			copy = new ScreenBuffer(screen.cols, 1, true);
+			this.rows[index] = copy;
+		}
 		copy.copyRowFrom(screen, row, 0);
 		copy.links = screen.links;
 		if (this.count === this.capacity) {
-			this.rows[this.head] = copy;
 			this.head = (this.head + 1) % this.capacity;
 		} else {
-			this.rows[(this.head + this.count) % this.capacity] = copy;
 			this.count++;
 		}
 	}

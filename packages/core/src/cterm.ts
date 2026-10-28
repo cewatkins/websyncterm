@@ -31,23 +31,25 @@ export const MAX_SEQ_PARAMS = 64;
 export const TRUECOLOR_FLAG = 0x80000000;
 
 /** Parser states. */
-const enum State {
-	Ground = 0,
-	Escape = 1,
-	EscapeIntermediate = 2,
-	CsiEntry = 3,
-	CsiParam = 4,
-	CsiIntermediate = 5,
-	CsiIgnore = 6,
-	OscString = 7,
-	DcsEntry = 8,
-	DcsParam = 9,
-	DcsIntermediate = 10,
-	DcsPassthrough = 11,
-	DcsIgnore = 12,
-	ApcString = 13,
-	IgnoreString = 14,
-}
+const State = {
+	Ground: 0,
+	Escape: 1,
+	EscapeIntermediate: 2,
+	CsiEntry: 3,
+	CsiParam: 4,
+	CsiIntermediate: 5,
+	CsiIgnore: 6,
+	OscString: 7,
+	DcsEntry: 8,
+	DcsParam: 9,
+	DcsIntermediate: 10,
+	DcsPassthrough: 11,
+	DcsIgnore: 12,
+	ApcString: 13,
+	IgnoreString: 14,
+} as const;
+
+type StateValue = (typeof State)[keyof typeof State];
 
 /** Extended attribute flags (CTERM_EXTATTR_* in upstream). */
 export const ExtAttr = {
@@ -234,7 +236,7 @@ export class CTerm {
 	/** Music capture state. */
 	private musicCapture: { buffer: string; active: boolean } | null = null;
 
-	private state: State = State.Ground;
+	private state: StateValue = State.Ground;
 	private params: SeqParams = newSeqParams();
 	private paramBuf = '';
 	private paramOverflow = false;
@@ -558,12 +560,13 @@ export class CTerm {
 
 	/** Write the current attribute into a cell. */
 	private writeCell(x: number, y: number, byte: number): void {
-		const flags = this.attrFlags();
-		const fg = this.fgIndex();
-		const bg = this.bgIndex();
-		const fgRgb = this.resolveColor(this.fgColor);
-		const bgRgb = this.resolveColor(this.bgColor);
-		const link = this.hyperlinkUri ? this.screen.internLink(this.hyperlinkUri, this.hyperlinkId) : -1;
+		this.refreshAttributes();
+		const flags = this.cachedFlags;
+		const fg = this.cachedFg;
+		const bg = this.cachedBg;
+		const fgRgb = this.cachedFgRgb;
+		const bgRgb = this.cachedBgRgb;
+		const link = this.cachedLink;
 		const i = y * this.cols + x;
 		this.screen.chars[i] = byteToUnicode(byte, this.codepage);
 		this.screen.fg[i] = fg;
@@ -580,6 +583,37 @@ export class CTerm {
 		if (value < 0) return 0;
 		if (value & TRUECOLOR_FLAG) return value & 0xffffff;
 		return this.palette.get(value);
+	}
+
+	/**
+	 * The cached cell attributes.
+	 *
+	 * Resolving the palette indices and the flags for every character is
+	 * expensive, so they are recomputed only when the attribute changes.
+	 */
+	private cachedFlags = 0;
+	private cachedFg = -1;
+	private cachedBg = -1;
+	private cachedFgRgb = 0;
+	private cachedBgRgb = 0;
+	private cachedLink = -1;
+	private attrDirty = true;
+
+	/** Mark the cached attributes as stale. */
+	private invalidateAttributes(): void {
+		this.attrDirty = true;
+	}
+
+	/** Recompute the cached cell attributes if needed. */
+	private refreshAttributes(): void {
+		if (!this.attrDirty) return;
+		this.attrDirty = false;
+		this.cachedFlags = this.attrFlags();
+		this.cachedFg = this.fgIndex();
+		this.cachedBg = this.bgIndex();
+		this.cachedFgRgb = this.resolveColor(this.fgColor);
+		this.cachedBgRgb = this.resolveColor(this.bgColor);
+		this.cachedLink = this.hyperlinkUri ? this.screen.internLink(this.hyperlinkUri, this.hyperlinkId) : -1;
 	}
 
 	/** Attribute flags for the current attribute byte. */
@@ -674,12 +708,9 @@ export class CTerm {
 		const height = bottom - top + 1;
 		if (height <= 0) return;
 		n = Math.min(n, height);
-		for (let i = 0; i < n; i++) this.scrollback.push(this.screen, top);
-		const saved = new ScreenBuffer(this.cols, n);
-		for (let i = 0; i < n; i++) saved.copyRowFrom(this.screen, top + i, i);
-		for (let y = top; y <= bottom - n; y++) {
-			this.screen.copyRowFrom(this.screen, y + n, y);
-		}
+		for (let i = 0; i < n; i++) this.scrollback.push(this.screen, top + i);
+		// Move the surviving rows up in one bulk copy.
+		this.screen.copyRows(top + n, top, height - n);
 		for (let y = bottom - n + 1; y <= bottom; y++) {
 			this.eraseRow(y);
 		}
@@ -693,19 +724,18 @@ export class CTerm {
 		const height = bottom - top + 1;
 		if (height <= 0) return;
 		n = Math.min(n, height);
-		for (let y = bottom; y >= top + n; y--) {
-			this.screen.copyRowFrom(this.screen, y - n, y);
-		}
+		this.screen.copyRows(top, top + n, height - n);
 		for (let y = top; y < top + n; y++) this.eraseRow(y);
 	}
 
 	/** Erase a whole row using the current attribute. */
 	private eraseRow(y: number): void {
-		const fg = this.fgIndex();
-		const bg = this.bgIndex();
-		const flags = this.attrFlags();
-		const fgRgb = this.resolveColor(this.fgColor);
-		const bgRgb = this.resolveColor(this.bgColor);
+		this.refreshAttributes();
+		const fg = this.cachedFg;
+		const bg = this.cachedBg;
+		const flags = this.cachedFlags;
+		const fgRgb = this.cachedFgRgb;
+		const bgRgb = this.cachedBgRgb;
 		const base = y * this.cols;
 		for (let x = 0; x < this.cols; x++) {
 			this.screen.chars[base + x] = 0x20;
@@ -721,11 +751,12 @@ export class CTerm {
 
 	/** Erase a range of cells using the current attribute. */
 	private eraseCells(x0: number, y0: number, x1: number, y1: number): void {
-		const fg = this.fgIndex();
-		const bg = this.bgIndex();
-		const flags = this.attrFlags();
-		const fgRgb = this.resolveColor(this.fgColor);
-		const bgRgb = this.resolveColor(this.bgColor);
+		this.refreshAttributes();
+		const fg = this.cachedFg;
+		const bg = this.cachedBg;
+		const flags = this.cachedFlags;
+		const fgRgb = this.cachedFgRgb;
+		const bgRgb = this.cachedBgRgb;
 		for (let y = y0; y <= y1; y++) {
 			for (let x = x0; x <= x1; x++) {
 				if (x < 0 || x >= this.cols || y < 0 || y >= this.rows) continue;
@@ -1283,6 +1314,7 @@ export class CTerm {
 	}
 
 	private oscHyperlink(rest: string): void {
+		this.invalidateAttributes();
 		const semi = rest.indexOf(';');
 		const params = semi === -1 ? rest : rest.slice(0, semi);
 		const uri = semi === -1 ? '' : rest.slice(semi + 1);
@@ -1946,9 +1978,10 @@ export class CTerm {
 
 	private eraseCell(y: number, x: number): void {
 		const i = y * this.cols + x;
-		const fg = this.fgIndex();
-		const bg = this.bgIndex();
-		const flags = this.attrFlags();
+		this.refreshAttributes();
+		const fg = this.cachedFg;
+		const bg = this.cachedBg;
+		const flags = this.cachedFlags;
 		this.screen.chars[i] = 0x20;
 		this.screen.fg[i] = fg;
 		this.screen.bg[i] = bg;
@@ -1964,9 +1997,7 @@ export class CTerm {
 		if (this.ypos < this.scrollTop || this.ypos > this.scrollBottom) return;
 		const height = this.scrollBottom - this.ypos + 1;
 		n = Math.min(n, height);
-		for (let y = this.scrollBottom; y >= this.ypos + n; y--) {
-			this.screen.copyRowFrom(this.screen, y - n, y);
-		}
+		this.screen.copyRows(this.ypos + n, this.ypos, this.scrollBottom - this.ypos + 1 - n);
 		for (let y = this.ypos; y < this.ypos + n; y++) this.eraseRow(y);
 	}
 
@@ -1975,9 +2006,7 @@ export class CTerm {
 		if (this.ypos < this.scrollTop || this.ypos > this.scrollBottom) return;
 		const height = this.scrollBottom - this.ypos + 1;
 		n = Math.min(n, height);
-		for (let y = this.ypos; y <= this.scrollBottom - n; y++) {
-			this.screen.copyRowFrom(this.screen, y + n, y);
-		}
+		this.screen.copyRows(this.ypos + n, this.ypos, this.scrollBottom - this.ypos + 1 - n);
 		for (let y = this.scrollBottom - n + 1; y <= this.scrollBottom; y++) this.eraseRow(y);
 	}
 
@@ -2161,6 +2190,14 @@ export class CTerm {
 	private setFlag(flag: number, on: boolean): void {
 		if (on) this.extattr |= flag;
 		else this.extattr &= ~flag;
+		// The bright/blink rules change how the attribute is rendered.
+		if (
+			flag === ExtAttr.NoBright ||
+			flag === ExtAttr.BgBright ||
+			flag === ExtAttr.NoBlink
+		) {
+			this.invalidateAttributes();
+		}
 	}
 
 	private setCtMode(ints: number[], on: boolean): void {
@@ -2636,6 +2673,7 @@ export class CTerm {
 	}
 
 	private sgrReset(): void {
+		this.invalidateAttributes();
 		this.negative = false;
 		this.attr = 0x07;
 		this.fgColor = -1;
@@ -2645,6 +2683,7 @@ export class CTerm {
 	}
 
 	private setFgColor(index: number): void {
+		this.invalidateAttributes();
 		if (this.negative) {
 			this.attr = (this.attr & 0xf0) | ((this.attr >> 4) & 0x0f);
 		} else {
@@ -2655,6 +2694,7 @@ export class CTerm {
 	}
 
 	private setBgColor(index: number): void {
+		this.invalidateAttributes();
 		if (this.negative) {
 			this.attr = (this.attr & 0x0f) | ((this.attr & 0x0f) << 4);
 		} else {
@@ -2665,6 +2705,7 @@ export class CTerm {
 	}
 
 	private setNegative(on: boolean): void {
+		this.invalidateAttributes();
 		if (on === this.negative) return;
 		const fg = this.attr & 0x0f;
 		const bg = (this.attr >> 4) & 0x0f;
@@ -2685,6 +2726,7 @@ export class CTerm {
 	 * (`38:5:N`, `38:2:R:G:B`) are accepted.
 	 */
 	private setExtendedColor(isForeground: boolean, subs: number[], index: number): void {
+		this.invalidateAttributes();
 		const colonForm = subs.length > 1;
 		let mode = -1;
 		let values: number[] = [];
