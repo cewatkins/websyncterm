@@ -1,0 +1,18 @@
+{
+  "name": "@websyncterm/embed",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/web-syncterm.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && vite build --config vite.lib.config.ts"
+  },
+  "dependencies": {
+    "@websyncterm/core": "workspace:*",
+    "@websyncterm/render": "workspace:*"
+  },
+  "devDependencies": {
+    "vite": "^6.0.5"
+  }
+}
