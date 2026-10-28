@@ -22,7 +22,7 @@ import {
 	type RenderCanvas,
 } from './font.js';
 import { CRTPostProcessor, type CRTOptions } from './crt.js';
-import { resolveVideoMode, type VideoMode } from './scaler.js';
+import { resolveVideoMode, type VideoMode, scaledWinSize } from './scaler.js';
 
 /* Attribute bits, matching AttrFlags in @websyncterm/core. */
 const FLAG_BLINK = 1 << 0;
@@ -249,6 +249,16 @@ export class Renderer {
 	}
 
 	/** Switch video mode; this resizes the backing store. */
+	/** The current screen mode. */
+	getMode(): VideoMode {
+		return this.mode;
+	}
+
+	/** The current integer pixel scale. */
+	getScale(): number {
+		return this.scale;
+	}
+
 	setMode(mode: VideoMode | string): void {
 		this.mode = resolveVideoMode(mode);
 		this.resize();
@@ -286,12 +296,26 @@ export class Renderer {
 		this.fullDirty = true;
 	}
 
-	/** Resize the backing store to the mode's native pixel size. */
+	/**
+	 * Resize the backing store to the mode's native pixel size.
+	 *
+	 * The backing store holds the unscaled pixel grid; the CSS size is the
+	 * aspect-corrected display size, so a 640x400 C80 screen is shown as
+	 * 640x480 (4:3) exactly as SyncTERM does.
+	 */
 	resize(): void {
 		this.width = Math.max(1, this.mode.cols * this.mode.cellW * this.scale);
 		this.height = Math.max(1, this.mode.rows * this.mode.cellH * this.scale);
 		this.canvas.width = this.width;
 		this.canvas.height = this.height;
+		const display = scaledWinSize(this.mode, this.scale);
+		// An OffscreenCanvas has no style object; only a DOM canvas can be
+		// sized for the display.
+		const styled = this.canvas as Partial<HTMLCanvasElement>;
+		if (typeof styled.style !== 'undefined') {
+			styled.style.width = `${display.width}px`;
+			styled.style.height = `${display.height}px`;
+		}
 		if (this.source) {
 			this.source.width = this.width;
 			this.source.height = this.height;

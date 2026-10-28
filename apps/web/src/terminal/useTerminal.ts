@@ -18,6 +18,7 @@ import {
 	BuiltinFontSet,
 	Renderer,
 	VIDEO_MODE_LIST,
+	scaledWinSize,
 	type BitmapFont,
 	type VideoMode,
 } from '@websyncterm/render';
@@ -65,6 +66,13 @@ export interface TerminalApi {
 	bytesIn: number;
 	bytesOut: number;
 	transfers: TransfersApi;
+	/**
+	 * Attach the canvas to the renderer.
+	 *
+	 * This must be called from the canvas element's ref callback; without it
+	 * nothing is ever painted.
+	 */
+	attachCanvas: (canvas: HTMLCanvasElement | null) => void;
 }
 
 /**
@@ -74,6 +82,7 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 	const termRef = useRef<CTerm | null>(null);
 	const connRef = useRef<ConnectionManager | null>(null);
 	const rendererRef = useRef<Renderer | null>(null);
+	const resizeObserverRef = useRef<ResizeObserver | null>(null);
 	const builtinRef = useRef<BuiltinFontSet | null>(null);
 	const ripRef = useRef<RipInterpreter | null>(null);
 	const ripVersionRef = useRef(0);
@@ -150,16 +159,52 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 	const attachCanvas = useCallback(
 		(canvas: HTMLCanvasElement | null) => {
 			if (!canvas) {
+				resizeObserverRef.current?.disconnect();
+				resizeObserverRef.current = null;
 				rendererRef.current?.destroy();
 				rendererRef.current = null;
 				return;
 			}
-			if (rendererRef.current) return;
+			// Recreate the renderer when the mode or the font changes so that
+			// the new geometry is applied.
+			if (rendererRef.current) {
+				rendererRef.current.destroy();
+				rendererRef.current = null;
+			}
 			const renderer = new Renderer(canvas);
 			rendererRef.current = renderer;
 			const font = builtinRef.current?.getFont(fontSlot, 16);
 			if (font) renderer.setFont(font);
 			renderer.setMode(modeName);
+			renderer.resize();
+
+			// Scale the terminal by the largest whole multiple that fits the
+			// available space, so the pixels stay square.
+			const container = canvas.parentElement;
+			if (container && typeof ResizeObserver !== 'undefined') {
+				resizeObserverRef.current?.disconnect();
+				const observer = new ResizeObserver(() => {
+					const active = rendererRef.current;
+					if (!active) return;
+					const mode = active.getMode();
+					const width = container.clientWidth;
+					const height = container.clientHeight;
+					if (width <= 0 || height <= 0) return;
+					// The largest whole multiple of the (aspect-corrected)
+					// screen that fits the available space.
+					let scale = 1;
+					for (let candidate = 1; candidate <= 32; candidate++) {
+						const display = scaledWinSize(mode, candidate);
+						if (display.width > width || display.height > height) break;
+						scale = candidate;
+					}
+					if (scale === active.getScale()) return;
+					active.setScale(scale);
+					active.resize();
+				});
+				observer.observe(container);
+				resizeObserverRef.current = observer;
+			}
 		},
 		[modeName, fontSlot],
 	);
@@ -195,6 +240,7 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 	useEffect(
 		() => () => {
 			connRef.current?.close();
+			resizeObserverRef.current?.disconnect();
 			rendererRef.current?.destroy();
 		},
 		[],
@@ -352,5 +398,6 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		bytesIn,
 		bytesOut,
 		transfers,
+		attachCanvas,
 	};
 }

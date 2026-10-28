@@ -68,11 +68,16 @@ export function TerminalPane({
 	const [keyboard, setKeyboard] = useState(false);
 	const [message, setMessage] = useState('');
 
+	// Depend on attachCanvas itself, not on the whole api object: the api is
+	// a new object on every render, and that would tear down and rebuild the
+	// renderer on every frame.
+	const { attachCanvas } = api;
 	const attach = useCallback(
 		(node: HTMLCanvasElement | null) => {
 			canvasRef.current = node;
+			attachCanvas(node);
 		},
-		[],
+		[attachCanvas],
 	);
 
 	// Keep the canvas focused so that keystrokes reach the terminal.

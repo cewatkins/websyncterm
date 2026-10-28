@@ -91,6 +91,61 @@ test.describe('WebSyncTERM', () => {
 		await expect(page.getByLabel('Address')).toBeVisible();
 	});
 
+	test('paints the terminal onto the canvas', async ({ page }) => {
+		await page.goto('/?debug=1');
+		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByLabel('Name', { exact: true }).fill('Mock BBS');
+		await page.getByLabel('Address').fill('127.0.0.1');
+		await page.getByLabel('Port').fill('18099');
+		await page.getByRole('button', { name: 'Save' }).click();
+		await page.getByRole('button', { name: 'Connect' }).first().click();
+
+		await expect.poll(async () => (await screenText(page)).join('\n')).toContain('Green text');
+
+		// The canvas must actually have been painted. Asserting on the
+		// terminal's screen buffer alone would miss a renderer that was never
+		// attached to the canvas.
+		const painted = await page.evaluate(() => {
+			const canvas = document.querySelector('canvas');
+			if (!canvas) return { error: 'no canvas' };
+			const ctx = canvas.getContext('2d');
+			if (!ctx) return { error: 'no 2d context' };
+			const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+			let lit = 0;
+			for (let i = 0; i < data.length; i += 4) {
+				if (data[i] || data[i + 1] || data[i + 2]) lit += 1;
+			}
+			return { lit, width: canvas.width, height: canvas.height };
+		});
+		expect((painted as { error?: string }).error).toBeUndefined();
+		expect((painted as { lit: number }).lit).toBeGreaterThan(100);
+	});
+
+	test('applies the screen mode aspect ratio to the canvas', async ({ page }) => {
+		await page.goto('/?debug=1');
+		await page.getByRole('button', { name: 'Add' }).click();
+		await page.getByLabel('Name', { exact: true }).fill('Mock BBS');
+		await page.getByLabel('Address').fill('127.0.0.1');
+		await page.getByLabel('Port').fill('18099');
+		await page.getByRole('button', { name: 'Save' }).click();
+		await page.getByRole('button', { name: 'Connect' }).first().click();
+		await expect.poll(async () => (await screenText(page)).join('\n')).toContain('Green text');
+
+		// C80 is a 640x400 pixel grid displayed at 4:3 (640x480).
+		const size = await page.evaluate(() => {
+			const canvas = document.querySelector('canvas');
+			return canvas
+				? { backing: [canvas.width, canvas.height], css: [canvas.clientWidth, canvas.clientHeight] }
+				: null;
+		});
+		expect(size).not.toBeNull();
+		const { backing, css } = size as { backing: number[]; css: number[] };
+		expect(backing[0]).toBe(640);
+		expect(backing[1]).toBe(400);
+		expect(css[0]).toBe(640);
+		expect(css[1]).toBe(480);
+	});
+
 	test('exposes the status region to assistive technology', async ({ page }) => {
 		await page.goto('/?debug=1');
 		await expect(page.getByRole('status')).toBeVisible();

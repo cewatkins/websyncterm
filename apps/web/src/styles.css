@@ -296,9 +296,10 @@ body {
 
 .terminal__canvas {
 	display: block;
-	max-width: 100%;
-	max-height: 100%;
+	/* The renderer sets an explicit CSS size so that the mode's aspect ratio
+	   is applied; do not let the browser rescale it. */
 	image-rendering: pixelated;
+	flex: 0 0 auto;
 }
 
 .terminal__canvas--smooth {
