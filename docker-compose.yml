@@ -1,6 +1,8 @@
 services:
   websyncterm:
     build: .
+    # Use the published image instead of building locally:
+    #   image: ghcr.io/cewatkins/websyncterm:latest
     image: websyncterm:latest
     container_name: websyncterm
     restart: unless-stopped

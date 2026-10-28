@@ -97,6 +97,29 @@ The gateway is then reachable at `ws://localhost:8023/ws`. See
 [`deploy/nginx/websyncterm.conf`](deploy/nginx/websyncterm.conf) for a
 reverse-proxy configuration.
 
+### The published image
+
+The image is built by CI and published to GitHub Container Registry:
+
+```bash
+docker pull ghcr.io/cewatkins/websyncterm:latest
+```
+
+Run it with the same environment variables as
+[`docker-compose.yml`](docker-compose.yml):
+
+```bash
+docker run --rm -p 8023:8023 \
+  -e GATEWAY_ALLOWLIST="bbs.example.com" \
+  -e GATEWAY_ALLOWED_ORIGINS="https://bbs.example.com" \
+  ghcr.io/cewatkins/websyncterm:latest
+```
+
+The gateway answers on <http://localhost:8023>, serves the embeddable widget
+at <http://localhost:8023/embed/> and reports its health at
+<http://localhost:8023/health>. The `latest` tag follows the default branch;
+release tags (`0.1.0`) are immutable.
+
 ---
 
 ## Repository layout
