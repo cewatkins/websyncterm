@@ -74,11 +74,9 @@ export function StatusBar({
 			<span>
 				In <strong>{bytesIn}</strong> / Out <strong>{bytesOut}</strong>
 			</span>
-			{detail ? (
-				<span role="status" aria-live="polite">
-					{detail}
-				</span>
-			) : null}
+			<span role="status" aria-live="polite" className="visually-hidden">
+				{detail || label}
+			</span>
 		</div>
 	);
 }

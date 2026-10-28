@@ -6,7 +6,9 @@
   "packageManager": "pnpm@9.15.9",
   "description": "WebSyncTERM - a browser-based SyncTERM-compatible BBS terminal and self-hostable ftelnet-style gateway",
   "license": "GPL-3.0-or-later",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "node tools/sync-font-assets.mjs && pnpm -r --filter \"./packages/**\" run build && pnpm --filter @websyncterm/gateway run build && pnpm --filter @websyncterm/embed run build && pnpm --filter @websyncterm/web run build",
     "build:packages": "pnpm -r --filter \"./packages/**\" run build",
@@ -21,6 +23,7 @@
     "fonts:sync": "node tools/sync-font-assets.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.10.2",
     "@vitest/coverage-v8": "^2.1.8",
     "typescript": "^5.7.2",

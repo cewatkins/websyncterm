@@ -1,8 +1,9 @@
 /**
  * The terminal hook.
  *
- * Wires the core terminal engine, the render package and the connection
- * manager together, and exposes a small imperative API to the React layer.
+ * Wires the core terminal engine, the render package, the RIP interpreter and
+ * the file-transfer engine together, and exposes a small imperative API to
+ * the React layer.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -20,17 +21,30 @@ import {
 	type BitmapFont,
 	type VideoMode,
 } from '@websyncterm/render';
+import { RipInterpreter } from '@websyncterm/rip';
+import { detectTransfer, detectXModem } from '@websyncterm/xfer';
 import { loadBuiltinFonts } from './fonts.js';
+import { useTransfers, type TransfersApi } from '../transfer/useTransfers.js';
 
 /** The font the terminal starts with. */
 const DEFAULT_FONT_SLOT = 0;
 
+/**
+ * How many incoming bytes are held back before being displayed.
+ *
+ * The hold-back lets the transfer detector recognise a ZMODEM or XMODEM
+ * handshake and remove it from the screen, exactly as SyncTERM does.
+ */
+const LOOKBEHIND = 64;
+
 /** Options for {@link useTerminal}. */
 export interface UseTerminalOptions {
-	/** The initial screen mode name, e.g. `80x25`. */
+	/** The initial screen mode name, e.g. `C80`. */
 	mode?: string;
 	/** The initial emulation. */
 	emulation?: TermEmulationName;
+	/** Whether the RIP interpreter is enabled. */
+	rip?: boolean;
 	/** Called when the user activates a hyperlink. */
 	onOpenLink?: (uri: string) => void;
 }
@@ -50,6 +64,7 @@ export interface TerminalApi {
 	elapsed: number;
 	bytesIn: number;
 	bytesOut: number;
+	transfers: TransfersApi;
 }
 
 /**
@@ -59,8 +74,12 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 	const termRef = useRef<CTerm | null>(null);
 	const connRef = useRef<ConnectionManager | null>(null);
 	const rendererRef = useRef<Renderer | null>(null);
-	const canvasRef = useRef<HTMLCanvasElement | null>(null);
 	const builtinRef = useRef<BuiltinFontSet | null>(null);
+	const ripRef = useRef<RipInterpreter | null>(null);
+	const ripVersionRef = useRef(0);
+	const lookbehindRef = useRef<number[]>([]);
+	const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const transferActiveRef = useRef(false);
 
 	const [state, setState] = useState<ConnectionState>('idle');
 	const [detail, setDetail] = useState('');
@@ -85,6 +104,13 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		});
 	}
 
+	const send = useCallback((data: Uint8Array) => {
+		connRef.current?.send(data);
+		setBytesOut((n) => n + data.length);
+	}, []);
+
+	const transfers = useTransfers(send);
+
 	// Load the built-in font data.
 	useEffect(() => {
 		let cancelled = false;
@@ -100,21 +126,43 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		};
 	}, []);
 
-	// Attach the renderer to the canvas.
-	const attachCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
-		canvasRef.current = canvas;
-		if (!canvas) {
-			rendererRef.current?.destroy();
-			rendererRef.current = null;
+	// Create the RIP interpreter when RIP is enabled.
+	useEffect(() => {
+		if (!options.rip) {
+			ripRef.current = null;
+			rendererRef.current?.setRipLayer(null);
 			return;
 		}
-		if (rendererRef.current) return;
-		const renderer = new Renderer(canvas);
-		rendererRef.current = renderer;
-		const font = builtinRef.current?.getFont(fontSlot, 16) ?? null;
-		if (font) renderer.setFont(font);
-		renderer.setMode(modeName);
-	}, [modeName, fontSlot, options.onOpenLink]);
+		const term = termRef.current;
+		if (!term) return;
+		const mode = VIDEO_MODE_LIST.find((m) => m.name === modeName) ?? VIDEO_MODE_LIST[3];
+		ripRef.current = new RipInterpreter({
+			width: mode.cols * mode.cellW,
+			height: mode.rows * mode.cellH,
+		});
+		ripVersionRef.current = 0;
+		return () => {
+			ripRef.current = null;
+		};
+	}, [options.rip, modeName]);
+
+	// Attach the renderer to the canvas.
+	const attachCanvas = useCallback(
+		(canvas: HTMLCanvasElement | null) => {
+			if (!canvas) {
+				rendererRef.current?.destroy();
+				rendererRef.current = null;
+				return;
+			}
+			if (rendererRef.current) return;
+			const renderer = new Renderer(canvas);
+			rendererRef.current = renderer;
+			const font = builtinRef.current?.getFont(fontSlot, 16);
+			if (font) renderer.setFont(font);
+			renderer.setMode(modeName);
+		},
+		[modeName, fontSlot],
+	);
 
 	// The render loop.
 	useEffect(() => {
@@ -128,7 +176,7 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 				x: term.xpos,
 				y: term.ypos,
 				style: term.cursorStyle,
-				visible: (term.extattr & 2) !== 0,
+				visible: term.cursorVisible,
 			});
 		};
 		frame = requestAnimationFrame(loop);
@@ -152,13 +200,97 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		[],
 	);
 
+	/**
+	 * Route incoming bytes.
+	 *
+	 * The bytes go through the RIP interpreter (when enabled) and are held
+	 * back briefly so that a ZMODEM handshake can be removed from the screen.
+	 */
+	const handleIncoming = useCallback(
+		(data: Uint8Array) => {
+			const term = termRef.current;
+			if (!term) return;
+			let payload = data;
+
+			const rip = ripRef.current;
+			if (rip) {
+				rip.feed(data);
+				const text = rip.takeText();
+				payload = text ? new TextEncoder().encode(text) : new Uint8Array(0);
+				ripVersionRef.current += 1;
+				const buffer = rip.pixelBuffer;
+				rendererRef.current?.setRipLayer({
+					data: buffer.data,
+					width: buffer.width,
+					height: buffer.height,
+					version: ripVersionRef.current,
+				});
+			}
+
+			if (transferActiveRef.current) {
+				// The bytes belong to the transfer protocol.
+				transfers.receive(payload);
+				return;
+			}
+
+			// Hold back the tail so that a transfer handshake can be removed.
+			const held = lookbehindRef.current;
+			for (const byte of payload) held.push(byte);
+
+			// The held bytes are flushed once the remote goes quiet, so a
+			// static screen is never left with a partial last line.
+			if (flushTimerRef.current !== null) clearTimeout(flushTimerRef.current);
+			flushTimerRef.current = setTimeout(() => {
+				flushTimerRef.current = null;
+				const pending = lookbehindRef.current;
+				if (pending.length === 0 || transferActiveRef.current) return;
+				const display = pending.splice(0, pending.length);
+				termRef.current?.write(Uint8Array.from(display));
+			}, 150);
+
+			// Look for a transfer handshake at the end of the held bytes.
+			if (held.length >= 4) {
+				const tail = Uint8Array.from(held.slice(-4));
+				const kind = detectTransfer(tail);
+				if (kind) {
+					const display = held.slice(0, held.length - 4);
+					held.length = 0;
+					if (display.length > 0) term.write(Uint8Array.from(display));
+					transferActiveRef.current = true;
+					transfers.start(kind);
+					return;
+				}
+			}
+			if (held.length >= 2) {
+				const tail = Uint8Array.from(held.slice(-2));
+				const kind = detectXModem(tail);
+				if (kind) {
+					const display = held.slice(0, held.length - 2);
+					held.length = 0;
+					if (display.length > 0) term.write(Uint8Array.from(display));
+					transferActiveRef.current = true;
+					transfers.start(kind);
+					return;
+				}
+			}
+
+			if (held.length <= LOOKBEHIND) return;
+			const display = held.slice(0, held.length - LOOKBEHIND);
+			held.splice(0, display.length);
+			term.write(Uint8Array.from(display));
+		},
+		[transfers],
+	);
+
 	const connect = useCallback(
 		(options2: ConnectOptions) => {
 			const term = termRef.current;
 			if (!term) return;
+			lookbehindRef.current = [];
+			transferActiveRef.current = false;
 			const conn = new ConnectionManager({
 				onData: (data) => {
-					term.write(data);
+					handleIncoming(data);
 					setBytesIn((n) => n + data.length);
 				},
 				onState: (next, why) => {
@@ -178,16 +310,11 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 			connRef.current = conn;
 			conn.connect(options2);
 		},
-		[],
+		[handleIncoming],
 	);
 
 	const disconnect = useCallback(() => {
 		connRef.current?.close();
-	}, []);
-
-	const send = useCallback((data: Uint8Array) => {
-		connRef.current?.send(data);
-		setBytesOut((n) => n + data.length);
 	}, []);
 
 	const setMode = useCallback((name: string) => {
@@ -199,13 +326,16 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		rendererRef.current?.setMode(mode);
 	}, []);
 
-	const setFont = useCallback((slot: number) => {
-		setFontSlot(slot);
-		const height = VIDEO_MODE_LIST.find((m) => m.name === modeName)?.cellH ?? 16;
-		const font: BitmapFont | null =
-			builtinRef.current?.getFont(slot, height as 8 | 14 | 16 | 20) ?? null;
-		if (font) rendererRef.current?.setFont(font);
-	}, [modeName]);
+	const setFont = useCallback(
+		(slot: number) => {
+			setFontSlot(slot);
+			const height = VIDEO_MODE_LIST.find((m) => m.name === modeName)?.cellH ?? 16;
+			const font: BitmapFont | null =
+				builtinRef.current?.getFont(slot, height as 8 | 14 | 16 | 20) ?? null;
+			if (font) rendererRef.current?.setFont(font);
+		},
+		[modeName],
+	);
 
 	return {
 		term: termRef.current,
@@ -221,5 +351,6 @@ export function useTerminal(options: UseTerminalOptions = {}): TerminalApi {
 		elapsed,
 		bytesIn,
 		bytesOut,
+		transfers,
 	};
 }

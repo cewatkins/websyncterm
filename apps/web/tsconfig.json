@@ -8,7 +8,9 @@
 		"baseUrl": ".",
 		"paths": {
 			"@websyncterm/core": ["../../packages/core/src/index.ts"],
-			"@websyncterm/render": ["../../packages/render/src/index.ts"]
+			"@websyncterm/render": ["../../packages/render/src/index.ts"],
+			"@websyncterm/xfer": ["../../packages/xfer/src/index.ts"],
+			"@websyncterm/rip": ["../../packages/rip/src/index.ts"]
 		},
 		"noEmit": true
 	},

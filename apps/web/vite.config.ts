@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
 
 const renderSrc = fileURLToPath(new URL('../../packages/render/src/index.ts', import.meta.url));
+
+/** The gateway the dev server proxies to. */
+const gatewayUrl = process.env.GATEWAY_URL ?? 'http://localhost:8023';
 const coreSrc = fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url));
 
 export default defineConfig({
@@ -17,9 +20,9 @@ export default defineConfig({
 		port: 5173,
 		strictPort: false,
 		proxy: {
-			'/api': { target: 'http://localhost:8023', changeOrigin: true },
-			'/health': { target: 'http://localhost:8023', changeOrigin: true },
-			'/ws': { target: 'ws://localhost:8023', ws: true },
+			'/api': { target: gatewayUrl, changeOrigin: true },
+			'/health': { target: gatewayUrl, changeOrigin: true },
+			'/ws': { target: gatewayUrl.replace(/^http/, 'ws'), ws: true },
 		},
 	},
 	build: {

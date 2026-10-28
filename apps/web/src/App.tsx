@@ -5,6 +5,7 @@ import { useTerminal } from './terminal/useTerminal.js';
 import { DirectoryStore, type DirectoryEntry } from './directory/directory.js';
 import { DirectoryView } from './directory/DirectoryView.js';
 import { StatusBar } from './ui/StatusBar.js';
+import { TransferPanel } from './ui/TransferPanel.js';
 import { Dialog } from './ui/Dialog.js';
 
 /**
@@ -35,8 +36,10 @@ export function App(): JSX.Element {
 	const [speed, setSpeed] = useState(0);
 	const [linkPrompt, setLinkPrompt] = useState<string | null>(null);
 	const [error, setError] = useState('');
+	const [ripEnabled, setRipEnabled] = useState(false);
 
 	const api = useTerminal({
+		rip: ripEnabled,
 		onOpenLink: (uri) => {
 			if (/^(https?|telnet):/i.test(uri)) setLinkPrompt(uri);
 		},
@@ -65,6 +68,7 @@ export function App(): JSX.Element {
 			setError('');
 			setSystem(entry.name || entry.address);
 			setSpeed(entry.speed);
+			setRipEnabled(entry.rip);
 			api.connect({
 				host: entry.address,
 				port: entry.port,
@@ -79,6 +83,13 @@ export function App(): JSX.Element {
 		},
 		[api, store],
 	);
+
+	// Expose a debug hook for the end-to-end tests and for troubleshooting.
+	useEffect(() => {
+		if (typeof location === 'undefined') return;
+		if (!new URLSearchParams(location.search).has('debug')) return;
+		(window as unknown as { __wst?: unknown }).__wst = { api, entries, connect };
+	}, [api, entries, connect]);
 
 	const save = useCallback(
 		(entry: DirectoryEntry) => {
@@ -196,16 +207,19 @@ export function App(): JSX.Element {
 						onImport={importEntries}
 					/>
 				) : (
-					<TerminalPane
-						api={api}
-						connected={api.state === 'connected'}
-						onDisconnect={() => {
-							api.disconnect();
-							setShowDirectory(true);
-						}}
-						onToggleFullscreen={toggleFullscreen}
-						onScreenshot={screenshot}
-					/>
+					<>
+						<TerminalPane
+							api={api}
+							connected={api.state === 'connected'}
+							onDisconnect={() => {
+								api.disconnect();
+								setShowDirectory(true);
+							}}
+							onToggleFullscreen={toggleFullscreen}
+							onScreenshot={screenshot}
+						/>
+						<TransferPanel transfers={api.transfers} />
+					</>
 				)}
 			</div>
 

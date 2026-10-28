@@ -44,6 +44,26 @@ export interface SixelOverlay {
 	ch?: number;
 }
 
+/**
+ * A RIP graphics layer.
+ *
+ * The RIP interpreter keeps its own pixel buffer, addressed in device pixels
+ * of the terminal's physical resolution.
+ */
+export interface RipOverlay {
+	/** 0xAARRGGBB per pixel. */
+	data: Uint32Array;
+	width: number;
+	height: number;
+	/**
+	 * Bumped by the producer whenever the contents change.
+	 *
+	 * The pixel buffer is usually mutated in place, so the renderer needs an
+	 * explicit version to know when to rebuild its copy.
+	 */
+	version?: number;
+}
+
 /** Cursor state passed to {@link Renderer.render}. */
 export interface RenderCursor {
 	x: number;
@@ -158,6 +178,10 @@ export class Renderer {
 	private lastCursorStyle: string | null = null;
 
 	private sixel: SixelOverlay | null = null;
+	private rip: RipOverlay | null = null;
+	private ripCanvas: RenderCanvas | null = null;
+	private ripData: Uint32Array | null = null;
+	private ripVersion = -1;
 	private sixelCanvas: RenderCanvas | null = null;
 	private sixelPixels: Int32Array | null = null;
 	private sixelPalette: Palette | null = null;
@@ -239,6 +263,20 @@ export class Renderer {
 	}
 
 	/** Attach or detach the sixel overlay. */
+	/**
+	 * Set the RIP graphics layer.
+	 *
+	 * The layer is composited beneath the text, like the sixel layer.
+	 */
+	setRipLayer(image: RipOverlay | null): void {
+		if (this.rip === image) return;
+		this.rip = image;
+		this.ripCanvas = null;
+		this.ripData = null;
+		this.ripVersion = -1;
+		this.fullDirty = true;
+	}
+
 	setSixel(image: SixelOverlay | null): void {
 		if (image === this.sixel) return;
 		this.sixel = image;
@@ -316,7 +354,8 @@ export class Renderer {
 			if (this.fullDirty) {
 				ctx.fillStyle = '#000000';
 				ctx.fillRect(0, 0, this.width, this.height);
-				this.drawSixel(palette);
+				this.drawRip();
+			this.drawSixel(palette);
 			}
 
 			const x0 = Math.max(0, dirty.x0);
@@ -472,8 +511,13 @@ export class Renderer {
 		const ch = this.mode.cellH * this.scale;
 		const px = x * cw;
 		const py = y * ch;
-		this.ctx.fillStyle = rgbToCss(bg);
-		this.ctx.fillRect(px, py, cw, ch);
+		// When a RIP graphics layer is present, cells with the default
+		// background let the graphics show through, exactly as upstream's
+		// CIOLIB_BG_PIXEL_GRAPHICS handling does.
+		if (!(this.rip && bg === 0x000000)) {
+			this.ctx.fillStyle = rgbToCss(bg);
+			this.ctx.fillRect(px, py, cw, ch);
+		}
 		if (fg !== bg) {
 			const code = unicodeToGlyphIndex(screen.chars[index]);
 			this.drawGlyphColored(code, fg, px, py);
@@ -566,6 +610,50 @@ export class Renderer {
 		shadow.flags.set(screen.flags);
 		shadow.fgRgb.set(screen.fgRgb);
 		shadow.bgRgb.set(screen.bgRgb);
+	}
+
+	private drawRip(): void {
+		const image = this.rip;
+		if (!image || image.width <= 0 || image.height <= 0) return;
+		const canvas = this.ensureRipCanvas();
+		if (!canvas) return;
+		this.ctx.imageSmoothingEnabled = false;
+		this.ctx.drawImage(
+			canvas as CanvasImageSource,
+			0,
+			0,
+			image.width * this.scale,
+			image.height * this.scale,
+		);
+		this.ctx.imageSmoothingEnabled = this.opt.smoothing;
+	}
+
+	private ensureRipCanvas(): RenderCanvas | null {
+		const image = this.rip;
+		if (!image) return null;
+		const version = image.version ?? 0;
+		if (this.ripCanvas && this.ripData === image.data && this.ripVersion === version) {
+			return this.ripCanvas;
+		}
+		const canvas = createCanvas2D(image.width, image.height);
+		if (!canvas) return null;
+		const ctx = get2DContext(canvas);
+		if (!ctx) return null;
+		const data = ctx.createImageData(image.width, image.height);
+		const out = data.data;
+		for (let i = 0; i < image.data.length; i++) {
+			const argb = image.data[i];
+			const offset = i * 4;
+			out[offset] = (argb >> 16) & 0xff;
+			out[offset + 1] = (argb >> 8) & 0xff;
+			out[offset + 2] = argb & 0xff;
+			out[offset + 3] = (argb >>> 24) & 0xff;
+		}
+		ctx.putImageData(data, 0, 0);
+		this.ripCanvas = canvas;
+		this.ripData = image.data;
+		this.ripVersion = version;
+		return canvas;
 	}
 
 	private drawSixel(palette: Palette): void {

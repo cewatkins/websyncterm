@@ -137,11 +137,11 @@ export function DirectoryView({
 					/>
 				</div>
 
-				{filtered.length === 0 ? (
-					<p className="directory__empty">No systems yet. Choose “Add” to create one.</p>
-				) : (
-					<div role="listbox" aria-label="Dialing directory">
-						{filtered.map((entry) => (
+				<div role="listbox" aria-label="Dialing directory">
+					{filtered.length === 0 ? (
+						<p className="directory__empty">No systems yet. Choose “Add” to create one.</p>
+					) : (
+						filtered.map((entry) => (
 							<div
 								key={entry.id}
 								role="option"
@@ -175,9 +175,9 @@ export function DirectoryView({
 									</button>
 								</span>
 							</div>
-						))}
-					</div>
-				)}
+						))
+					)}
+				</div>
 			</div>
 
 			<div className="directory__editor">

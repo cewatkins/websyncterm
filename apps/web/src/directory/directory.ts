@@ -7,6 +7,7 @@
  */
 
 import type { Protocol } from '@websyncterm/core';
+import { DIRECTORY_STORE, openDatabase } from './db.js';
 
 /** One dialing directory entry. */
 export interface DirectoryEntry {
@@ -70,10 +71,6 @@ export function emptyEntry(partial: Partial<DirectoryEntry> = {}): DirectoryEntr
 	};
 }
 
-const DB_NAME = 'websyncterm';
-const DB_VERSION = 1;
-const STORE = 'directory';
-
 /**
  * An IndexedDB-backed directory.
  */
@@ -83,19 +80,7 @@ export class DirectoryStore {
 	/** Open (and if necessary create) the database. */
 	async open(): Promise<void> {
 		if (this.db) return;
-		this.db = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open(DB_NAME, DB_VERSION);
-			request.onupgradeneeded = () => {
-				const db = request.result;
-				if (!db.objectStoreNames.contains(STORE)) {
-					const store = db.createObjectStore(STORE, { keyPath: 'id' });
-					store.createIndex('folder', 'folder');
-					store.createIndex('name', 'name');
-				}
-			};
-			request.onsuccess = () => resolve(request.result);
-			request.onerror = () => reject(request.error);
-		});
+		this.db = await openDatabase();
 	}
 
 	/** Every entry. */
@@ -103,8 +88,8 @@ export class DirectoryStore {
 		await this.open();
 		const db = this.db!;
 		return new Promise((resolve, reject) => {
-			const tx = db.transaction(STORE, 'readonly');
-			const request = tx.objectStore(STORE).getAll();
+			const tx = db.transaction(DIRECTORY_STORE, 'readonly');
+			const request = tx.objectStore(DIRECTORY_STORE).getAll();
 			request.onsuccess = () => resolve(request.result as DirectoryEntry[]);
 			request.onerror = () => reject(request.error);
 		});
@@ -115,8 +100,8 @@ export class DirectoryStore {
 		await this.open();
 		const db = this.db!;
 		return new Promise((resolve, reject) => {
-			const tx = db.transaction(STORE, 'readwrite');
-			tx.objectStore(STORE).put(entry);
+			const tx = db.transaction(DIRECTORY_STORE, 'readwrite');
+			tx.objectStore(DIRECTORY_STORE).put(entry);
 			tx.oncomplete = () => resolve();
 			tx.onerror = () => reject(tx.error);
 		});
@@ -127,8 +112,8 @@ export class DirectoryStore {
 		await this.open();
 		const db = this.db!;
 		return new Promise((resolve, reject) => {
-			const tx = db.transaction(STORE, 'readwrite');
-			tx.objectStore(STORE).delete(id);
+			const tx = db.transaction(DIRECTORY_STORE, 'readwrite');
+			tx.objectStore(DIRECTORY_STORE).delete(id);
 			tx.oncomplete = () => resolve();
 			tx.onerror = () => reject(tx.error);
 		});
