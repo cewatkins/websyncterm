@@ -25,11 +25,15 @@ const targets = [
 		cmd: 'npx',
 		args: ['tsx', 'watch', 'src/index.ts'],
 		color: '\x1b[36m',
-		// The development gateway allows private addresses so that a local
-		// mock BBS can be reached. Never set this in production.
+		// The development gateway runs wide open so that any host can be
+		// dialled while testing. Never set this in production: a real
+		// deployment must keep the allowlist and the SSRF protection.
+		//
+		// Set GATEWAY_ALLOWLIST in the environment to restrict it again, e.g.
+		//   GATEWAY_ALLOWLIST=bbs.example.com pnpm dev
 		env: {
 			GATEWAY_ALLOW_PRIVATE: '1',
-			GATEWAY_ALLOWLIST: process.env.GATEWAY_ALLOWLIST ?? '127.0.0.1,localhost',
+			GATEWAY_ALLOWLIST: process.env.GATEWAY_ALLOWLIST ?? '',
 		},
 	},
 	{

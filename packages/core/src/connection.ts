@@ -140,11 +140,24 @@ export class ConnectionManager {
 		};
 		socket.onmessage = (event) => {
 			if (typeof event.data === 'string') {
+				let message: GatewayMessage | null = null;
 				try {
-					this.handlers.onMessage?.(JSON.parse(event.data) as GatewayMessage);
+					message = JSON.parse(event.data) as GatewayMessage;
 				} catch {
 					/* ignore malformed control frames */
 				}
+				if (!message) return;
+				// The gateway reports failures as an "error" control message
+				// before it closes the socket; surface it rather than leaving
+				// the user with a silent disconnect.
+				if (message.type === 'error') {
+					const detail =
+						(typeof message.message === 'string' && message.message) ||
+						(typeof message.reason === 'string' && message.reason) ||
+						'Connection failed';
+					this.setState('error', detail);
+				}
+				this.handlers.onMessage?.(message);
 				return;
 			}
 			const bytes = new Uint8Array(event.data as ArrayBuffer);
@@ -159,6 +172,10 @@ export class ConnectionManager {
 			this.setState('error', 'The gateway reported a connection error.');
 		};
 		socket.onclose = (event) => {
+			// A failed connection closes the socket right after the error
+			// message; keep the error visible rather than reporting a clean
+			// disconnect.
+			if (this.state === 'error') return;
 			this.setState('disconnected', event.reason || undefined);
 		};
 	}

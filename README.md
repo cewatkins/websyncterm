@@ -32,9 +32,24 @@ pnpm dev
 * Embed app: <http://localhost:5174>
 * Gateway: <http://localhost:8023>
 
-The development gateway is configured to allow `127.0.0.1` and `localhost` so
-that a local test BBS can be reached. **Never set `GATEWAY_ALLOW_PRIVATE=1` in
-production.**
+The development gateway runs **wide open** — no host allowlist, and private
+addresses are permitted — so that any BBS on the internet can be dialled while
+testing:
+
+```
+GATEWAY_ALLOW_PRIVATE=1
+GATEWAY_ALLOWLIST=            # empty = open directory
+```
+
+To restrict it again while developing, set the allowlist in the environment:
+
+```bash
+GATEWAY_ALLOWLIST=bbs.example.com pnpm dev
+```
+
+**Neither of these settings belongs in production.** A deployed gateway must
+keep an allowlist and the SSRF protection on; see
+[the gateway section](#running-the-gateway).
 
 ### Trying it without a real BBS
 
@@ -54,6 +69,20 @@ Then open <http://localhost:5173>, click **Add**, and enter:
 
 Click **Save**, then **Connect**. The screen should fill with
 `Welcome to the mock BBS` in green and `Blue on yellow` on a blue background.
+
+### Dialling a real BBS
+
+The same flow works for any public BBS. For example, `telehack.com` on port
+23:
+
+| Field | Value |
+|---|---|
+| Name | Telehack |
+| Address | `telehack.com` |
+| Port | `23` |
+
+If the connection fails, the reason is shown both in the red banner and in the
+status bar at the bottom of the window.
 
 The embed page does the same thing with a URL:
 <http://localhost:5174/?bbs=127.0.0.1:18099&proto=telnet>.

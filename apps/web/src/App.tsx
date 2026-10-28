@@ -195,6 +195,12 @@ export function App(): JSX.Element {
 				</div>
 			) : null}
 
+			{api.detail && api.state !== 'connected' ? (
+				<div className="banner" role="alert">
+					{api.detail}
+				</div>
+			) : null}
+
 			<div className="app__main">
 				{showDirectory ? (
 					<DirectoryView
