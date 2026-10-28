@@ -1,0 +1,42 @@
+services:
+  websyncterm:
+    build: .
+    image: websyncterm:latest
+    container_name: websyncterm
+    restart: unless-stopped
+    ports:
+      - "8023:8023"
+    environment:
+      # Sysop mode: only these hosts may be dialled.
+      GATEWAY_ALLOWLIST: "bbs.example.com,mystic.modembbs.org:23"
+      # Leave empty to run as an open directory (SSRF protection still applies).
+      # GATEWAY_ALLOWLIST: ""
+      # Restrict browser origins (recommended in production).
+      GATEWAY_ALLOWED_ORIGINS: "https://bbs.example.com"
+      GATEWAY_MAX_SESSIONS: "64"
+      GATEWAY_IDLE_TIMEOUT_MS: "1800000"
+      GATEWAY_RATE_LIMIT: "100"
+      GATEWAY_SESSION_RATE_LIMIT: "10"
+      # Set to 1 only for a trusted private network.
+      GATEWAY_ALLOW_PRIVATE: "0"
+      # Optional built-in TLS (otherwise terminate TLS with nginx/Caddy).
+      # GATEWAY_TLS_CERT: "/certs/fullchain.pem"
+      # GATEWAY_TLS_KEY: "/certs/privkey.pem"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8023/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # Optional reverse proxy terminating TLS.
+  # nginx:
+  #   image: nginx:alpine
+  #   restart: unless-stopped
+  #   ports:
+  #     - "443:443"
+  #   volumes:
+  #     - ./deploy/nginx/websyncterm.conf:/etc/nginx/conf.d/default.conf:ro
+  #     - ./deploy/nginx/certs:/etc/nginx/certs:ro
+  #   depends_on:
+  #     - websyncterm

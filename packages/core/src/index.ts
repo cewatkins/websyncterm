@@ -14,3 +14,5 @@ export * from './sixel.js';
 export * from './telnet.js';
 export * from './keymap.js';
 export * from './music.js';
+export * from './ansfile.js';
+export * from './clipboard.js';
