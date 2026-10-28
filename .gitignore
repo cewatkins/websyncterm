@@ -5,3 +5,5 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 apps/web/public/syncterm/
+apps/web/public/assets/
+apps/embed/public/assets/

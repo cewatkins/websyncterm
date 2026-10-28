@@ -118,7 +118,7 @@ export function parseYModemBlock0(data: Uint8Array, index = 0): XModemFileInfo |
 		return Number.isFinite(n) ? n : 0;
 	};
 	return {
-		name,
+		name: baseName(name),
 		size: decimal(fields[0]),
 		mtime: octal(fields[1]),
 		mode: octal(fields[2]),
@@ -172,8 +172,7 @@ export interface XModemReceiverOptions extends EngineOptions {
  * the first `poll()` already contains the byte the remote needs.
  */
 export class XModemReceiver extends TransferEngine {
-	private readonly variant: XModemVariant;
-	private readonly crc: boolean;
+	private crc: boolean;
 	private readonly gMode: boolean;
 	private readonly ymodem: boolean;
 	private readonly maxBlockSize: number;
@@ -183,7 +182,6 @@ export class XModemReceiver extends TransferEngine {
 
 	private readonly queue = new ByteQueue();
 	private writer: SinkWriter | null = null;
-	private info: XModemFileInfo | null = null;
 	private expectedBlock: number;
 	private bytesLeft = Infinity;
 	private errors = 0;
@@ -194,7 +192,6 @@ export class XModemReceiver extends TransferEngine {
 	constructor(options: XModemReceiverOptions = {}) {
 		const variant = options.variant ?? 'xmodem-crc';
 		super(protocolForVariant(variant), 'receive', options);
-		this.variant = variant;
 		this.crc = variant !== 'xmodem-chksum';
 		this.gMode = isGMode(variant);
 		this.ymodem = isYModem(variant);
@@ -203,6 +200,9 @@ export class XModemReceiver extends TransferEngine {
 		this.sinkFactory = options.sinkFactory;
 		this.singleSink = options.sink;
 		this.expectedBlock = this.ymodem ? 0 : 1;
+		if (!this.ymodem && this.singleSink) {
+			this.writer = new SinkWriter(this.singleSink);
+		}
 		this.updateProgress({
 			fileName: options.fileName ?? '',
 			bytesTotal: 0,
@@ -366,7 +366,6 @@ export class XModemReceiver extends TransferEngine {
 			return;
 		}
 
-		this.info = info;
 		this.bytesLeft = info.size;
 		this.fileCount = info.filesRemaining || 1;
 		this.updateProgress({
@@ -432,7 +431,17 @@ export class XModemReceiver extends TransferEngine {
 			this.fail('too-many-errors', `too many errors (last: ${reason} on block ${blockNumber})`);
 			return;
 		}
-		this.requestBlock(this.expectedBlock);
+		if (this.expectedBlock === 0) {
+			// Still negotiating the header: re-request the mode.
+			this.requestBlock(0);
+		} else {
+			// First-block errors downgrade CRC to the 8-bit checksum, as
+			// SyncTERM does after max_errors/3 failures.
+			if (this.expectedBlock === 1 && this.crc && !this.gMode && this.errors > Math.floor(this.maxErrors / 3)) {
+				this.crc = false;
+			}
+			this.emit([NAK]);
+		}
 		this.arm(this.timeouts.byte);
 	}
 
@@ -440,7 +449,7 @@ export class XModemReceiver extends TransferEngine {
 		return blockNumber <= 1 ? this.timeouts.header : this.timeouts.headerLater;
 	}
 
-	protected onTimeout(): void {
+	protected override onTimeout(): void {
 		if (this.done) return;
 		this.attempts++;
 		if (this.attempts > this.maxErrors + 1) {
@@ -452,7 +461,7 @@ export class XModemReceiver extends TransferEngine {
 		this.arm(this.timeoutFor(this.expectedBlock));
 	}
 
-	protected doAbort(): void {
+	protected override doAbort(): void {
 		this.emit(xmodemCancelSequence());
 		this.writer?.close();
 		this.writer = null;
@@ -495,7 +504,7 @@ export class XModemSender extends TransferEngine {
 	private fileIndex = 0;
 	private blockNumber = 1;
 	private pending: { data: Uint8Array; size: number; block: number } | null = null;
-	private carry = new Uint8Array(0);
+	private carry: Uint8Array = new Uint8Array(0);
 	private sentInFile = 0;
 	private needHeader: boolean;
 	private terminating = false;
@@ -597,6 +606,7 @@ export class XModemSender extends TransferEngine {
 				break;
 			case 'data':
 				if (this.pending) {
+					this.addBytes(this.pending.size);
 					this.sentInFile += this.pending.size;
 					this.updateProgress({
 						bytesTransferred: this.sentInFile,
@@ -810,7 +820,7 @@ export class XModemSender extends TransferEngine {
 		return { data, size, block };
 	}
 
-	protected onTimeout(): void {
+	protected override onTimeout(): void {
 		if (this.done) return;
 		if (this.awaiting === 'mode') {
 			if (++this.modeAttempts > this.maxErrors + 1) {
@@ -839,7 +849,7 @@ export class XModemSender extends TransferEngine {
 		}
 	}
 
-	protected doAbort(): void {
+	protected override doAbort(): void {
 		this.emit(xmodemCancelSequence());
 		this.finishAborted();
 	}

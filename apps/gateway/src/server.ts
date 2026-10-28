@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import websocket from '@fastify/websocket';
@@ -43,6 +43,8 @@ ${embed}
 <li><code>GET /api/config</code> — allowlist, limits and rate limits</li>
 <li><code>GET /ws?host=…&amp;port=…&amp;proto=…</code> — WebSocket byte pipe</li>
 </ul>
+<p>WebSocket clients may request the <code>websyncterm</code> subprotocol.
+Connections without a subprotocol are also accepted.</p>
 <p>In production this gateway must sit behind a TLS terminator (nginx, Caddy or
 similar); it speaks plain HTTP/WebSocket unless
 <code>GATEWAY_TLS_CERT</code>/<code>GATEWAY_TLS_KEY</code> are configured.</p>
@@ -51,10 +53,11 @@ similar); it speaks plain HTTP/WebSocket unless
 }
 
 /**
- * Build the Fastify application. Route registration is synchronous; call
- * `app.listen()` (or `app.ready()`) to start it.
+ * Build the Fastify application. Plugins are registered before routes so
+ * `@fastify/websocket` can hook the `/ws` route; call `app.listen()` (or
+ * `app.ready()`) to start it.
  */
-export function buildServer(config: GatewayConfig): GatewayServer {
+export async function buildServer(config: GatewayConfig): Promise<GatewayServer> {
 	const tls =
 		config.tlsCertPath && config.tlsKeyPath
 			? { cert: readFileSync(config.tlsCertPath), key: readFileSync(config.tlsKeyPath) }
@@ -62,7 +65,7 @@ export function buildServer(config: GatewayConfig): GatewayServer {
 
 	const app = Fastify({
 		logger: { level: process.env.LOG_LEVEL ?? 'info' },
-		disableRequestLogging: true,
+		logController: new LogController({ disableRequestLogging: true }),
 		trustProxy: config.trustProxy,
 		...(tls ? { https: tls } : {}),
 	});
@@ -82,18 +85,18 @@ export function buildServer(config: GatewayConfig): GatewayServer {
 		);
 	});
 
-	void app.register(cors, {
+	await app.register(cors, {
 		origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : true,
 		methods: ['GET', 'OPTIONS'],
 	});
 
-	void app.register(rateLimit, {
+	await app.register(rateLimit, {
 		global: true,
 		max: config.rateLimit,
 		timeWindow: 60_000,
 	});
 
-	void app.register(websocket, {
+	await app.register(websocket, {
 		options: {
 			maxPayload: config.maxMessageBytes,
 			// Reject upgrades from disallowed origins before the socket opens.
@@ -118,7 +121,7 @@ export function buildServer(config: GatewayConfig): GatewayServer {
 
 	const embedAvailable = existsSync(config.embedDistPath);
 	if (embedAvailable) {
-		void app.register(fastifyStatic, {
+		await app.register(fastifyStatic, {
 			root: config.embedDistPath,
 			prefix: '/embed/',
 		});

@@ -30,6 +30,14 @@ export interface ConnectOptions {
 	allowPrivate: boolean;
 	/** Verify remote TLS certificates (telnets). */
 	tlsVerify: boolean;
+	/**
+	 * True when the client performs its own NAWS negotiation.
+	 *
+	 * The browser-side TelnetNegotiator owns IAC negotiation, so the gateway
+	 * must not inject its own NAWS frames or the server may end up with a
+	 * stale window size.
+	 */
+	clientOwnsNaws: boolean;
 }
 
 /**

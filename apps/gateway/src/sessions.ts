@@ -27,6 +27,11 @@ export interface SessionRequest {
 	mode?: number;
 	bps?: number;
 	reversed?: boolean;
+	/**
+	 * True when the client performs its own NAWS negotiation, in which case
+	 * the gateway must not inject NAWS frames of its own.
+	 */
+	clientOwnsNaws?: boolean;
 }
 
 const WAITING_TIMEOUT_MS = 60_000;
@@ -144,6 +149,11 @@ export function parseSessionRequest(raw: Record<string, unknown>): SessionReques
 
 	const reversed = readBoolean(raw, ['reversed']);
 	if (reversed !== undefined) request.reversed = reversed;
+
+	const clientOwnsNaws = raw['naws'];
+	if (clientOwnsNaws !== undefined) {
+		request.clientOwnsNaws = clientOwnsNaws === true || clientOwnsNaws === '1' || clientOwnsNaws === 1;
+	}
 
 	return request;
 }
@@ -474,13 +484,13 @@ class Session {
 		try {
 			await resolveAndValidateHost(host, this.config.allowPrivate);
 		} catch (error) {
-			if (this.state === 'closed') return;
+			if (this.isClosed()) return;
 			this.logger.warn(`session ${this.id} refused ${host}:${port}: ${errorMessage(error)}`);
 			this.fail(errorMessage(error));
 			return;
 		}
 
-		if (this.state === 'closed') return;
+		if (this.isClosed()) return;
 
 		const connect = connectors[proto];
 		const options = {
@@ -498,6 +508,7 @@ class Session {
 			reversed: request.reversed === true,
 			allowPrivate: this.config.allowPrivate,
 			tlsVerify: this.config.tlsVerifyRemote,
+			clientOwnsNaws: request.clientOwnsNaws === true,
 		};
 
 		try {
@@ -508,7 +519,7 @@ class Session {
 				requestHostKey: (fingerprint) => this.requestHostKey(fingerprint),
 			});
 
-			if (this.state === 'closed') {
+			if (this.isClosed()) {
 				connection.close();
 				return;
 			}
@@ -524,10 +535,14 @@ class Session {
 
 			this.sendJson({ type: 'connected' });
 		} catch (error) {
-			if (this.state === 'closed') return;
+			if (this.isClosed()) return;
 			this.logger.warn(`session ${this.id} failed to connect to ${host}:${port}: ${errorMessage(error)}`);
 			this.fail(errorMessage(error));
 		}
+	}
+
+	private isClosed(): boolean {
+		return this.state === 'closed';
 	}
 
 	private onRemoteData(data: Buffer): void {

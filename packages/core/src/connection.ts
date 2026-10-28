@@ -6,7 +6,7 @@
  * the terminal engine.
  */
 
-import { TelnetNegotiator, type TelnetOptions } from '@websyncterm/core';
+import { TelnetNegotiator, type TelnetOptions } from './telnet.js';
 
 /** The protocols the gateway understands. */
 export type Protocol = 'telnet' | 'telnets' | 'ssh' | 'rlogin' | 'raw';
@@ -35,6 +35,8 @@ export interface ConnectOptions {
 	speed?: number;
 	/** The gateway's WebSocket URL. */
 	gatewayUrl?: string;
+	/** An alias for {@link ConnectOptions.gatewayUrl}. */
+	gateway?: string;
 	/** An optional bearer token for a locked-down gateway. */
 	token?: string;
 }
@@ -108,8 +110,11 @@ export class ConnectionManager {
 		if (options.cols) params.set('cols', String(options.cols));
 		if (options.rows) params.set('rows', String(options.rows));
 		if (options.token) params.set('token', options.token);
+		// Tell the gateway that this client owns the NAWS negotiation so that
+		// it does not inject its own window-size frames.
+		params.set('naws', '1');
 
-		const base = options.gatewayUrl ?? DEFAULT_GATEWAY_URL;
+		const base = options.gatewayUrl ?? options.gateway ?? DEFAULT_GATEWAY_URL;
 		const url = `${base.replace(/\/$/, '')}/ws?${params.toString()}`;
 
 		let socket: WebSocket;
@@ -215,11 +220,15 @@ export class ConnectionManager {
 		this.socket.send(data);
 	}
 
+	/** Send a JSON control message to the gateway. */
+	sendControl(message: Record<string, unknown>): void {
+		if (this.socket?.readyState !== WebSocket.OPEN) return;
+		this.socket.send(JSON.stringify(message));
+	}
+
 	/** Tell the gateway that the terminal size changed. */
 	resize(cols: number, rows: number): void {
-		if (this.socket?.readyState === WebSocket.OPEN) {
-			this.socket.send(JSON.stringify({ type: 'resize', cols, rows }));
-		}
+		this.sendControl({ type: 'resize', cols, rows });
 		if (this.telnet) {
 			this.telnet.sendWindowChange();
 		}

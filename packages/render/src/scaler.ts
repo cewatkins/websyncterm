@@ -268,10 +268,10 @@ export function snapScale(
 		mult--;
 	}
 	if (!Number.isFinite(mult) || mult < 1) mult = 1;
-	let size = scaledWinSizeClamped(mode, mult, maxWidth, maxHeight);
-	while ((size.width > maxWidth || size.height > maxHeight) && mult > 1) {
+	let size = scaledWinSize(mode, mult);
+	while (((maxWidth > 0 && size.width > maxWidth) || (maxHeight > 0 && size.height > maxHeight)) && mult > 1) {
 		mult--;
-		size = scaledWinSizeClamped(mode, mult, maxWidth, maxHeight);
+		size = scaledWinSize(mode, mult);
 	}
 	return { width: size.width, height: size.height, scale: mult };
 }
@@ -306,9 +306,10 @@ export function computeDisplaySize(
 	if (!Number.isFinite(scale)) scale = minScale;
 
 	const snap =
-		options.integer === true ||
-		(options.currentScale !== undefined &&
-			Math.abs(options.currentScale - Math.round(options.currentScale)) < INTEGER_TOLERANCE);
+		fit >= minScale &&
+		(options.integer === true ||
+			(options.currentScale !== undefined &&
+				Math.abs(options.currentScale - Math.round(options.currentScale)) < INTEGER_TOLERANCE));
 
 	let width: number;
 	let height: number;
@@ -320,6 +321,14 @@ export function computeDisplaySize(
 		width = snapped.width;
 		height = snapped.height;
 		scale = snapped.scale;
+	} else if (fit < minScale) {
+		// The viewport is smaller than the native screen. SyncTERM never scales
+		// below 1.0, so report the native aspect-corrected size instead of a
+		// shrunken one; the caller clips or scrolls.
+		const size = scaledWinSize(mode, 1);
+		width = size.width;
+		height = size.height;
+		scale = 1;
 	} else {
 		const size = scaledWinSizeClamped(mode, scale, viewportW, viewportH);
 		width = size.width;

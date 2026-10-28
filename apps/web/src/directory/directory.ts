@@ -6,7 +6,7 @@
  * fields, plus folders, sort order and an optional last-called timestamp.
  */
 
-import type { Protocol } from '../terminal/connection.js';
+import type { Protocol } from '@websyncterm/core';
 
 /** One dialing directory entry. */
 export interface DirectoryEntry {

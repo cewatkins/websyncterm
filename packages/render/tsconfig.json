@@ -1,6 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "outDir": "dist", "rootDir": "src", "composite": true },
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true,
+    "baseUrl": ".",
+    "paths": { "@websyncterm/core": ["../core/src/index.ts"] }
+  },
   "include": ["src/**/*.ts"],
-  "references": []
+  "references": [{ "path": "../core" }]
 }

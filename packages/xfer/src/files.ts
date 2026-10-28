@@ -84,15 +84,34 @@ export class MemoryFileSource implements FileSource {
  */
 export class SinkWriter {
 	private chain: Promise<void> = Promise.resolve();
+	private asyncWrites = false;
 
 	constructor(readonly sink: FileSink) {}
 
 	write(chunk: Uint8Array): void {
-		this.chain = this.chain.then(() => this.sink.write(chunk));
+		if (!this.asyncWrites) {
+			// Synchronous sinks (MemoryFileSink, and most IndexedDB wrappers
+			// that pre-allocate) see the write immediately.
+			const result = this.sink.write(chunk);
+			if (result && typeof (result as Promise<void>).then === 'function') {
+				this.asyncWrites = true;
+				this.chain = (result as Promise<void>).then(() => undefined);
+			}
+			return;
+		}
+		this.chain = this.chain.then(() => this.sink.write(chunk)).then(() => undefined);
 	}
 
 	close(): void {
-		this.chain = this.chain.then(() => this.sink.close());
+		if (!this.asyncWrites) {
+			const result = this.sink.close();
+			if (result && typeof (result as Promise<void>).then === 'function') {
+				this.asyncWrites = true;
+				this.chain = (result as Promise<void>).then(() => undefined);
+			}
+			return;
+		}
+		this.chain = this.chain.then(() => this.sink.close()).then(() => undefined);
 	}
 
 	/** Resolve once every queued write and the close have settled. */

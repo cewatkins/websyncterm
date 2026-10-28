@@ -228,8 +228,10 @@ export function parseBuiltinFonts(source: BuiltinFontData | string): BuiltinFont
 	return new BuiltinFontSet(data);
 }
 
-/** Alias used by callers that already have the decoded object. */
-export const loadBuiltinFonts = parseBuiltinFonts;
+/** Parse the built-in font JSON and install it as the default set. */
+export function loadBuiltinFonts(source: BuiltinFontData | string): BuiltinFontSet {
+	return setBuiltinFonts(source);
+}
 
 let defaultBuiltinFonts: BuiltinFontSet | null = null;
 

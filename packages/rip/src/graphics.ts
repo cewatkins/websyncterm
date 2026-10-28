@@ -217,7 +217,12 @@ export class RipRaster {
 			return;
 		for (let y = this.viewport.sy; y <= this.viewport.ey; y++)
 			for (let x = this.viewport.sx; x <= this.viewport.ex; x++)
-				this.setPixelRel(x, y, 0);
+				this.setPixelAbs(x, y, 0);
+	}
+
+	/** Set one pixel using absolute virtual coordinates. */
+	setPixelAbs(vx: number, vy: number, index: number): void {
+		this.putIndex(vx, vy, index, false);
 	}
 
 	/** Reset the graphics state without clearing the pixel buffer. */
@@ -326,7 +331,14 @@ export class RipRaster {
 	private clipLine(
 		x1: number, y1: number, x2: number, y2: number,
 	): [number, number, number, number] | null {
-		const { sx, sy, ex, ey } = this.viewport;
+		// Coordinates reaching drawLine are viewport-relative (the pen,
+		// text glyph strokes and every primitive all use that space), so
+		// clip against the viewport's *size* rather than its absolute
+		// origin.
+		const sx = 0;
+		const sy = 0;
+		const ex = this.viewport.ex - this.viewport.sx;
+		const ey = this.viewport.ey - this.viewport.sy;
 		for (;;) {
 			let oc1 = 0;
 			let oc2 = 0;

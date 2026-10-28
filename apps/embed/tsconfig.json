@@ -1,0 +1,15 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"lib": ["ES2022", "DOM", "DOM.Iterable"],
+		"types": ["vite/client"],
+		"noEmit": true,
+		"baseUrl": ".",
+		"paths": {
+			"@websyncterm/core": ["../../packages/core/src/index.ts"],
+			"@websyncterm/render": ["../../packages/render/src/index.ts"]
+		}
+	},
+	"include": ["src/**/*.ts"]
+}

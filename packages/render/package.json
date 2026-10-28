@@ -6,9 +6,12 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
-  "files": ["dist"],
+  "files": ["dist", "assets"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "watch": "tsc -p tsconfig.json --watch"
+  },
+  "dependencies": {
+    "@websyncterm/core": "workspace:*"
   }
 }

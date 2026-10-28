@@ -1,0 +1,432 @@
+:root {
+	color-scheme: dark;
+
+	/* The palette follows the classic SyncTERM look: a blue field with amber
+	   text, which is what most BBSes are designed against. */
+	--bg: #0000aa;
+	--bg-panel: #000066;
+	--bg-panel-alt: #000088;
+	--fg: #ffff55;
+	--fg-dim: #aaaa55;
+	--fg-bright: #ffffff;
+	--accent: #55ffff;
+	--danger: #ff5555;
+	--ok: #55ff55;
+	--border: #5555ff;
+
+	--font-mono: ui-monospace, "Cascadia Mono", "DejaVu Sans Mono", Menlo, Consolas, monospace;
+	--radius: 4px;
+}
+
+@media (prefers-contrast: more) {
+	:root {
+		--bg: #000000;
+		--bg-panel: #000000;
+		--bg-panel-alt: #101010;
+		--fg: #ffffff;
+		--fg-dim: #cccccc;
+		--border: #ffffff;
+	}
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	background: var(--bg);
+	color: var(--fg);
+	font-family: var(--font-mono);
+	font-size: 14px;
+	line-height: 1.4;
+	overflow: hidden;
+}
+
+.app {
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	height: 100%;
+}
+
+.app__toolbar {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.35rem 0.6rem;
+	background: var(--bg-panel);
+	border-bottom: 1px solid var(--border);
+	flex-wrap: wrap;
+}
+
+.app__title {
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	color: var(--fg-bright);
+	margin-right: auto;
+}
+
+.app__main {
+	position: relative;
+	overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.app__status {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.25rem 0.6rem;
+	background: var(--bg-panel);
+	border-top: 1px solid var(--border);
+	font-size: 0.85em;
+	color: var(--fg-dim);
+	flex-wrap: wrap;
+}
+
+.app__status strong {
+	color: var(--fg);
+	font-weight: 600;
+}
+
+.status-dot {
+	width: 0.6em;
+	height: 0.6em;
+	border-radius: 50%;
+	background: var(--fg-dim);
+	display: inline-block;
+}
+
+.status-dot--connected {
+	background: var(--ok);
+}
+
+.status-dot--error {
+	background: var(--danger);
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.btn {
+	appearance: none;
+	border: 1px solid var(--border);
+	background: var(--bg-panel-alt);
+	color: var(--fg);
+	font: inherit;
+	font-size: 0.9em;
+	padding: 0.25rem 0.7rem;
+	border-radius: var(--radius);
+	cursor: pointer;
+}
+
+.btn:hover:not(:disabled) {
+	background: var(--border);
+	color: #000;
+}
+
+.btn:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.btn--primary {
+	background: var(--fg);
+	color: #000;
+	font-weight: 700;
+}
+
+.btn--danger {
+	border-color: var(--danger);
+	color: var(--danger);
+}
+
+/* -------------------------------------------------------------- directory */
+
+.directory {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
+	height: 100%;
+	min-height: 0;
+}
+
+.directory__list {
+	overflow: auto;
+	border-right: 1px solid var(--border);
+}
+
+.directory__toolbar {
+	display: flex;
+	gap: 0.4rem;
+	padding: 0.4rem;
+	border-bottom: 1px solid var(--border);
+	flex-wrap: wrap;
+}
+
+.directory__search {
+	flex: 1 1 12rem;
+	min-width: 8rem;
+	background: var(--bg-panel);
+	color: var(--fg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.25rem 0.5rem;
+	font: inherit;
+}
+
+.entry {
+	display: grid;
+	grid-template-columns: 1fr auto;
+	gap: 0.2rem 0.75rem;
+	padding: 0.5rem 0.75rem;
+	border-bottom: 1px solid rgba(85, 85, 255, 0.3);
+	cursor: pointer;
+}
+
+.entry:hover,
+.entry:focus-visible {
+	background: var(--bg-panel-alt);
+	outline: none;
+}
+
+.entry[aria-selected='true'] {
+	background: var(--fg);
+	color: #000;
+}
+
+.entry__name {
+	font-weight: 700;
+}
+
+.entry__meta {
+	grid-column: 1;
+	color: var(--fg-dim);
+	font-size: 0.85em;
+}
+
+.entry[aria-selected='true'] .entry__meta {
+	color: #333;
+}
+
+.entry__actions {
+	grid-row: 1 / span 2;
+	display: flex;
+	gap: 0.25rem;
+	align-items: center;
+}
+
+.directory__editor {
+	overflow: auto;
+	padding: 0.75rem;
+	background: var(--bg-panel);
+}
+
+.directory__empty {
+	padding: 2rem;
+	text-align: center;
+	color: var(--fg-dim);
+}
+
+.field {
+	display: grid;
+	gap: 0.2rem;
+	margin-bottom: 0.7rem;
+}
+
+.field label {
+	font-size: 0.8em;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--fg-dim);
+}
+
+.field input,
+.field select,
+.field textarea {
+	background: var(--bg);
+	color: var(--fg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 0.3rem 0.5rem;
+	font: inherit;
+	width: 100%;
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible {
+	outline: 3px solid var(--accent);
+	outline-offset: 1px;
+}
+
+.field--row {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+
+.field--row input[type='checkbox'] {
+	width: auto;
+}
+
+/* --------------------------------------------------------------- terminal */
+
+.terminal {
+	position: relative;
+	flex: 1 1 auto;
+	min-height: 0;
+	background: #000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+}
+
+.terminal__canvas {
+	display: block;
+	max-width: 100%;
+	max-height: 100%;
+	image-rendering: pixelated;
+}
+
+.terminal__canvas--smooth {
+	image-rendering: auto;
+}
+
+.terminal__overlay {
+	position: absolute;
+	inset: auto 0 0 0;
+	display: flex;
+	gap: 0.4rem;
+	padding: 0.5rem;
+	background: linear-gradient(to top, rgba(0, 0, 0, 0.85), transparent);
+	opacity: 0;
+	transition: opacity 120ms ease;
+}
+
+.terminal:hover .terminal__overlay,
+.terminal:focus-within .terminal__overlay {
+	opacity: 1;
+}
+
+.terminal__hint {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	color: var(--fg-dim);
+	background: rgba(0, 0, 0, 0.7);
+	text-align: center;
+	padding: 2rem;
+}
+
+/* --------------------------------------------------------------- keyboard */
+
+.keyboard {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.25rem;
+	padding: 0.4rem;
+	background: var(--bg-panel);
+	border-top: 1px solid var(--border);
+}
+
+.keyboard button {
+	flex: 1 0 auto;
+	min-width: 2.4rem;
+	padding: 0.5rem 0.6rem;
+	background: var(--bg-panel-alt);
+	color: var(--fg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	font: inherit;
+	cursor: pointer;
+}
+
+.keyboard button:active {
+	background: var(--fg);
+	color: #000;
+}
+
+/* ---------------------------------------------------------------- dialog */
+
+.dialog-backdrop {
+	position: fixed;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.7);
+	display: grid;
+	place-items: center;
+	padding: 1rem;
+	z-index: 50;
+}
+
+.dialog {
+	background: var(--bg-panel);
+	border: 2px solid var(--border);
+	border-radius: var(--radius);
+	padding: 1rem;
+	min-width: min(30rem, 90vw);
+	max-width: 90vw;
+	max-height: 85vh;
+	overflow: auto;
+}
+
+.dialog h2 {
+	margin-top: 0;
+	font-size: 1.1em;
+	color: var(--fg-bright);
+}
+
+.dialog__actions {
+	display: flex;
+	gap: 0.5rem;
+	justify-content: flex-end;
+	margin-top: 1rem;
+}
+
+/* ------------------------------------------------------------- utilities */
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.banner {
+	padding: 0.5rem 0.75rem;
+	background: var(--danger);
+	color: #000;
+	font-weight: 700;
+}
+
+.banner--info {
+	background: var(--accent);
+}
+
+@media (max-width: 720px) {
+	.directory {
+		grid-template-columns: 1fr;
+	}
+
+	.directory__editor {
+		border-top: 1px solid var(--border);
+	}
+}

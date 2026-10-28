@@ -16,3 +16,4 @@ export * from './keymap.js';
 export * from './music.js';
 export * from './ansfile.js';
 export * from './clipboard.js';
+export * from './connection.js';

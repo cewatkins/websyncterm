@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="WebSyncTERM">
+	<rect width="64" height="64" rx="8" fill="#000" />
+	<rect x="6" y="10" width="52" height="36" rx="3" fill="#0a0a2e" stroke="#55ffff" stroke-width="2" />
+	<text x="32" y="36" font-family="monospace" font-size="20" fill="#55ffff" text-anchor="middle">&gt;_</text>
+	<rect x="10" y="50" width="44" height="4" rx="2" fill="#aa00aa" />
+</svg>

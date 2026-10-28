@@ -18,6 +18,7 @@ import { ScreenBuffer, Scrollback } from './buffer.js';
 import { Palette, SHADOW_PALETTE_OFFSET } from './palette.js';
 import { SixelDecoder } from './sixel.js';
 import { byteToUnicode, Codepage, type CodepageName } from './charset.js';
+import { TermEmulation, type TermEmulationName } from './types.js';
 import type { CursorStyleName } from './types.js';
 
 /** Maximum number of CSI parameters accepted, matching MAX_SEQ_PARAMS. */
@@ -247,6 +248,9 @@ export class CTerm {
 	private codepage: CodepageName;
 	private readonly opts: CTermOptions;
 
+	/** The terminal emulation in use. */
+	emulation: TermEmulationName = TermEmulation.AnsiBbs;
+
 	/** Set of DEC modes currently enabled (for DECRQM and mode reports). */
 	private readonly decModes = new Set<number>();
 	/** Saved DEC mode set (CTSMS). */
@@ -304,6 +308,21 @@ export class CTerm {
 	/** Set the active code page. */
 	setCodepage(cp: CodepageName): void {
 		this.codepage = cp;
+	}
+
+	/** Set the terminal emulation. */
+	setEmulation(emulation: TermEmulationName): void {
+		this.emulation = emulation;
+	}
+
+	/** Whether DECBKM is set (backspace sends 0x08 rather than 0x7f). */
+	get decBkm(): boolean {
+		return (this.extattr & ExtAttr.DecBkm) !== 0;
+	}
+
+	/** Whether the cursor is visible. */
+	get cursorVisible(): boolean {
+		return (this.extattr & ExtAttr.CursorVisible) !== 0;
 	}
 
 	/** Get the active code page. */

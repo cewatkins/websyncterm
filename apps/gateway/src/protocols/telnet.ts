@@ -48,6 +48,7 @@ class NawsTracker {
 export function createTelnetConnection(
 	socket: import('node:net').Socket,
 	handlers: ConnectHandlers,
+	clientOwnsNaws = false,
 ): RemoteConnection {
 	const tracker = new NawsTracker();
 	let latestSize: { cols: number; rows: number } | null = null;
@@ -57,7 +58,7 @@ export function createTelnetConnection(
 		{
 			onData(data: Buffer): void {
 				tracker.push(data);
-				if (tracker.enabled && latestSize) {
+				if (!clientOwnsNaws && tracker.enabled && latestSize) {
 					socket.write(buildNawsFrame(latestSize.cols, latestSize.rows));
 					latestSize = null;
 				}
@@ -72,6 +73,7 @@ export function createTelnetConnection(
 	return {
 		...connection,
 		resize(cols: number, rows: number): void {
+			if (clientOwnsNaws) return;
 			if (tracker.enabled) {
 				socket.write(buildNawsFrame(cols, rows));
 			} else {
@@ -90,5 +92,5 @@ export const connect: ConnectFunction = async (
 	handlers: ConnectHandlers,
 ): Promise<RemoteConnection> => {
 	const socket = await openTcpSocket(options.host, options.port, options.allowPrivate);
-	return createTelnetConnection(socket, handlers);
+	return createTelnetConnection(socket, handlers, options.clientOwnsNaws);
 };

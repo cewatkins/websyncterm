@@ -115,7 +115,7 @@ void main() {
 	if (uVignette > 0.0) {
 		vec2 v = uv * (1.0 - uv);
 		float vig = clamp(v.x * v.y * 16.0, 0.0, 1.0);
-		col *= mix(1.0, pow(vig, 0.35), uVignette * uVignetteAmount);
+		col *= mix(1.0, pow(vig, 0.35), uVignette);
 	}
 
 	fragColor = vec4(clamp(col, 0.0, 1.0), 1.0);

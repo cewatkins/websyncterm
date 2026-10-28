@@ -8,7 +8,7 @@
   "license": "GPL-3.0-or-later",
   "engines": { "node": ">=20" },
   "scripts": {
-    "build": "pnpm -r --filter \"./packages/**\" run build && pnpm --filter @websyncterm/gateway run build && pnpm --filter @websyncterm/embed run build && pnpm --filter @websyncterm/web run build",
+    "build": "node tools/sync-font-assets.mjs && pnpm -r --filter \"./packages/**\" run build && pnpm --filter @websyncterm/gateway run build && pnpm --filter @websyncterm/embed run build && pnpm --filter @websyncterm/web run build",
     "build:packages": "pnpm -r --filter \"./packages/**\" run build",
     "dev": "node scripts/dev.mjs",
     "dev:web": "pnpm --filter @websyncterm/web run dev",
@@ -17,7 +17,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b tsconfig.json",
     "lint": "tsc -b tsconfig.json",
-    "fonts:extract": "node tools/extract-fonts.mjs"
+    "fonts:extract": "node tools/extract-fonts.mjs",
+    "fonts:sync": "node tools/sync-font-assets.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

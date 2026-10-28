@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>WebSyncTERM</title>
+		<meta name="description" content="A browser-based BBS terminal." />
+		<style>
+			html, body { margin: 0; height: 100%; background: #000; color: #ffff55;
+				font-family: ui-monospace, monospace; }
+			#app { max-width: 60rem; margin: 0 auto; padding: 0.5rem; }
+			.bar { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; margin-bottom: 0.5rem; }
+			.bar label { font-size: 0.85em; }
+			.bar input, .bar select { background: #000066; color: #ffff55; border: 1px solid #5555ff;
+				border-radius: 3px; font: inherit; padding: 0.15rem 0.35rem; }
+			.bar button { font: inherit; background: #000088; color: #ffff55; border: 1px solid #5555ff;
+				border-radius: 3px; padding: 0.2rem 0.6rem; cursor: pointer; }
+			.bar button:hover { background: #5555ff; color: #000; }
+			.hint { color: #aaaa55; font-size: 0.85em; margin: 0.4rem 0; }
+		</style>
+	</head>
+	<body>
+		<h1 style="font-size:1rem;margin:0.5rem">WebSyncTERM</h1>
+		<div id="app"></div>
+		<p class="hint">
+			Use <code>?bbs=host:port&amp;proto=telnet</code> to open a system directly.
+			Alt+Enter toggles fullscreen.
+		</p>
+		<script type="module" src="/src/embed.ts"></script>
+	</body>
+</html>
