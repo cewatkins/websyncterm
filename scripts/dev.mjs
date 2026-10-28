@@ -25,6 +25,12 @@ const targets = [
 		cmd: 'npx',
 		args: ['tsx', 'watch', 'src/index.ts'],
 		color: '\x1b[36m',
+		// The development gateway allows private addresses so that a local
+		// mock BBS can be reached. Never set this in production.
+		env: {
+			GATEWAY_ALLOW_PRIVATE: '1',
+			GATEWAY_ALLOWLIST: process.env.GATEWAY_ALLOWLIST ?? '127.0.0.1,localhost',
+		},
 	},
 	{
 		name: 'web',
@@ -50,7 +56,7 @@ for (const target of targets) {
 	const child = spawn(target.cmd, target.args, {
 		cwd: target.cwd,
 		stdio: ['ignore', 'pipe', 'pipe'],
-		env: { ...process.env, FORCE_COLOR: '1' },
+		env: { ...process.env, FORCE_COLOR: '1', ...(target.env ?? {}) },
 	});
 	children.push(child);
 	const prefix = `${target.color}[${target.name}]\x1b[0m `;

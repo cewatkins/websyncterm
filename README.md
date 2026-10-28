@@ -32,6 +32,32 @@ pnpm dev
 * Embed app: <http://localhost:5174>
 * Gateway: <http://localhost:8023>
 
+The development gateway is configured to allow `127.0.0.1` and `localhost` so
+that a local test BBS can be reached. **Never set `GATEWAY_ALLOW_PRIVATE=1` in
+production.**
+
+### Trying it without a real BBS
+
+A mock BBS is included:
+
+```bash
+pnpm mock-bbs        # listens on 127.0.0.1:18099 and emits some ANSI
+```
+
+Then open <http://localhost:5173>, click **Add**, and enter:
+
+| Field | Value |
+|---|---|
+| Name | Mock BBS |
+| Address | `127.0.0.1` |
+| Port | `18099` |
+
+Click **Save**, then **Connect**. The screen should fill with
+`Welcome to the mock BBS` in green and `Blue on yellow` on a blue background.
+
+The embed page does the same thing with a URL:
+<http://localhost:5174/?bbs=127.0.0.1:18099&proto=telnet>.
+
 Build and run everything in containers:
 
 ```bash
@@ -149,17 +175,23 @@ differences:
 ## Testing
 
 ```bash
-pnpm test                    # the whole vitest suite (289 tests)
-pnpm typecheck               # tsc across the workspace
-npx playwright test          # the end-to-end suite (6 tests)
-node tools/benchmark.mjs     # the parse-throughput benchmark
+pnpm test             # the vitest suite (289 tests)
+pnpm test:e2e         # the Playwright end-to-end suite (6 tests)
+pnpm test:all         # both
+pnpm typecheck        # tsc across the packages
+pnpm typecheck:apps   # tsc across the apps
+pnpm benchmark        # the parse-throughput benchmark
 ```
 
-The end-to-end suite needs the Playwright browser:
+The end-to-end suite needs the Playwright browser the first time:
 
 ```bash
 npx playwright install chromium
 ```
+
+`pnpm test:e2e` starts everything it needs by itself: the mock BBS, the
+gateway and the web app. It expects the gateway to have been built first
+(`pnpm build:packages && pnpm --filter @websyncterm/gateway run build`).
 
 The conformance harness replays `.ANS`/`.BIN`/`.XB` corpora and compares the
 resulting screen buffers; the render package has golden-image tests against

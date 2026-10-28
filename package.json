@@ -20,7 +20,12 @@
     "typecheck": "tsc -b tsconfig.json",
     "lint": "tsc -b tsconfig.json",
     "fonts:extract": "node tools/extract-fonts.mjs",
-    "fonts:sync": "node tools/sync-font-assets.mjs"
+    "fonts:sync": "node tools/sync-font-assets.mjs",
+    "test:e2e": "playwright test",
+    "test:all": "pnpm test && pnpm test:e2e",
+    "mock-bbs": "node e2e/mock-bbs.mjs",
+    "benchmark": "node tools/benchmark.mjs",
+    "typecheck:apps": "pnpm --filter @websyncterm/web exec tsc -p tsconfig.json --noEmit && pnpm --filter @websyncterm/embed exec tsc -p tsconfig.json --noEmit && pnpm --filter @websyncterm/gateway exec tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.1",
