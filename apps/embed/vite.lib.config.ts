@@ -19,6 +19,10 @@ export default defineConfig({
 	define: { 'process.env.NODE_ENV': '"production"' },
 	build: {
 		outDir: 'dist',
+		// The page build (`vite build`) writes index.html and the assets into
+		// the same directory; emptying it here would delete the page and
+		// leave the gateway's /embed/ route without an index.
+		emptyOutDir: false,
 		lib: {
 			entry: fileURLToPath(new URL('./src/main.ts', import.meta.url)),
 			name: 'WebSyncTerm',

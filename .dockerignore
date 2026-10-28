@@ -4,3 +4,9 @@ node_modules
 .git
 *.log
 coverage
+# Stale incremental-build state: tsc would otherwise think the packages are
+# already compiled and emit nothing into the image.
+*.tsbuildinfo
+**/*.tsbuildinfo
+test-results
+**/test-results
