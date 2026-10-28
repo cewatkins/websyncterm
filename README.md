@@ -38,7 +38,9 @@ Build and run everything in containers:
 docker compose up --build
 ```
 
-The gateway is then reachable at `ws://localhost:8023/ws`.
+The gateway is then reachable at `ws://localhost:8023/ws`. See
+[`deploy/nginx/websyncterm.conf`](deploy/nginx/websyncterm.conf) for a
+reverse-proxy configuration.
 
 ---
 
@@ -147,8 +149,16 @@ differences:
 ## Testing
 
 ```bash
-pnpm test          # the whole vitest suite
-pnpm typecheck     # tsc across the workspace
+pnpm test                    # the whole vitest suite (289 tests)
+pnpm typecheck               # tsc across the workspace
+npx playwright test          # the end-to-end suite (6 tests)
+node tools/benchmark.mjs     # the parse-throughput benchmark
+```
+
+The end-to-end suite needs the Playwright browser:
+
+```bash
+npx playwright install chromium
 ```
 
 The conformance harness replays `.ANS`/`.BIN`/`.XB` corpora and compares the

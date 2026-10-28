@@ -23,7 +23,7 @@ Recorded on the development machine (Node 22, x86-64):
 | ANSI throughput | > 1 Mbit/s | **145 Mbit/s** (18 MB/s) |
 | Parse cost per 64 KiB chunk | < 8 ms | **3.6 ms** |
 | Parse cost per 4 MiB stream | < 512 ms | **231 ms** |
-| Web app bundle | < 400 kB gzipped | **102 kB** gzipped (329 kB raw) |
+| Web app bundle | < 400 kB gzipped | **128 kB** gzipped (421 kB raw) |
 | Embed bundle | < 400 kB gzipped | **30 kB** gzipped (97 kB raw) |
 
 The engine is comfortably inside the budget; the 1 Mbit/s requirement is

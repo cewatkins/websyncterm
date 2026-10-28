@@ -22,8 +22,8 @@ const targets = [
 	{
 		name: 'gateway',
 		cwd: resolve(root, 'apps/gateway'),
-		cmd: 'node',
-		args: ['--experimental-strip-types', '--watch', 'src/index.ts'],
+		cmd: 'npx',
+		args: ['tsx', 'watch', 'src/index.ts'],
 		color: '\x1b[36m',
 	},
 	{

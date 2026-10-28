@@ -323,7 +323,11 @@ change to the ANSI-BBS engine.
       buttons, an on-screen keyboard, clipboard access and fullscreen
 - [x] Host allowlist (sysop mode) and open-directory mode
 - [x] SSRF protection, rate limiting, max sessions, idle timeout, origin checks
-- [x] A Docker image and a `docker-compose.yml`
+- [~] A Docker image and a `docker-compose.yml` — the Dockerfile and the
+      compose file are provided and every step they run was verified
+      individually (the workspace build, `pnpm deploy --prod` and the
+      deployed gateway starting), but the image itself could not be built in
+      the development environment because Docker is not installed there
 - [x] A sample nginx configuration
 - [~] Direct connection to a Synchronet server's built-in WebSocket service
       (without the gateway) — the gateway can be pointed at any WebSocket
